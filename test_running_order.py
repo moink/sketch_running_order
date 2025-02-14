@@ -14,11 +14,28 @@ class TestGetAllowableNextSketches(unittest.TestCase):
         sketch2 = running_order.Sketch("I am the boss", {"Theresa", "Rocio"})
         sketch3 = running_order.Sketch("It's just me", {"Adrian"})
         result = running_order.get_allowable_next_sketches([sketch1, sketch2, sketch3])
-        expected_result = {
-            0: {1},
-            1: {0, 2},
-            2: {1},
-        }
+        expected_result = {0: {1}, 1: {0, 2}, 2: {1}}
+        self.assertEqual(expected_result, result)
+
+
+class TestGetAnchors(unittest.TestCase):
+    """Tests for the get_anchors function."""
+
+    def test_two_anchored_one_not(self):
+        """Simple test with first and last sketch anchored."""
+        sketch1 = running_order.Sketch("Jedi Warrior", anchored=True)
+        sketch2 = running_order.Sketch("I am the boss", anchored=False)
+        sketch3 = running_order.Sketch("It's just me", anchored=True)
+        result = running_order.get_anchors([sketch1, sketch2, sketch3])
+        expected_result = {0: 0, 2: 2}
+        self.assertEqual(expected_result, result)
+
+    def test_no_anchors(self):
+        """Simple test with first and last sketch anchored."""
+        sketch1 = running_order.Sketch("Jedi Warrior", anchored=False)
+        sketch2 = running_order.Sketch("I am the boss", anchored=False)
+        result = running_order.get_anchors([sketch1, sketch2])
+        expected_result = {}
         self.assertEqual(expected_result, result)
 
 

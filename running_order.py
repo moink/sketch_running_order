@@ -7,18 +7,52 @@ from typing import Iterable, Self
 
 @dataclass
 class Sketch:
-    """A sketch close to how it could be imported from a file or a UI."""
+    """A sketch close to how it could be imported from a file or a UI.
+
+    Attributes:
+        title:
+            The title of the sketch for use in printing the running order etc.
+        cast:
+            The actors who will act in the sketch.
+        anchored:
+            Whether the sketch is required to stay in its currently assigned position.
+    """
     title: str
     cast: frozenset[str] = frozenset()
+    anchored: bool = False
 
 
-def get_allowable_next_sketches(sketches):
-    """Get all sketches that can follow each sketch in a convenient form for numerical optimization."""
+def get_allowable_next_sketches(sketches: Iterable[Sketch]) -> dict[int, set[int]]:
+    """Get all sketches that can follow each sketch in form needed for solving.
+
+    Args:
+        sketches:
+            The sketches with their casts populated.
+
+    Returns:
+        allowed_nexts:
+            The key is a sketch number and the value is the set of all sketch numbers
+            that are permitted to be immediately after that sketch according the casting
+            constraints.
+    """
     result = defaultdict(set)
     for ((ind1, sketch1), (ind2, sketch2)) in itertools.product(enumerate(sketches), repeat=2):
         if not sketch1.cast.intersection(sketch2.cast):
             result[ind1].add(ind2)
-    return result
+    return dict(result)
+
+
+def get_anchors(sketches: Iterable[Sketch]) -> dict[int, int]:
+    """Get the anchors in the form needed for solving from the list of sketches.
+
+    Args:
+        sketches:
+            The sketches with their anchored properties populated.
+
+    Returns:
+
+    """
+    return {ind: ind for ind, sketch in enumerate(sketches) if sketch.anchored}
 
 
 class SketchOrder:
@@ -203,3 +237,5 @@ def find_best_order(
             candidate for candidate, cost in costs.items() if cost == min_cost
         }
     return list(best_orders)[0]
+
+
