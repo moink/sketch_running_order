@@ -121,5 +121,74 @@ class TestFindAllOrders(unittest.TestCase):
         result = running_order.find_all_orders(allowed_nexts, anchors)
         self.assertEqual(expected_result, result)
 
+
+class TestEvaluateCost(unittest.TestCase):
+
+    def test_perfect_match(self):
+        desired = [0, 1, 2]
+        candidate = running_order.SketchOrder([0, 1, 2])
+        result = running_order.evaluate_cost(candidate, desired)
+        self.assertEqual(0, result)
+
+    def test_reverse(self):
+        desired = [2, 1, 0]
+        candidate = running_order.SketchOrder([0, 1, 2])
+        result = running_order.evaluate_cost(candidate, desired)
+        self.assertEqual(4, result)
+
+    def test_one_away(self):
+        desired = [0, 2, 1]
+        candidate = running_order.SketchOrder([0, 1, 2])
+        result = running_order.evaluate_cost(candidate, desired)
+        self.assertEqual(2, result)
+
+
+class TestFindBestOrder(unittest.TestCase):
+
+    def test_find_best_order_constraints_only(self):
+        allowed_nexts = {
+            0: {1},
+            1: {0, 2},
+            2: {1},
+        }
+        expected_result = running_order.SketchOrder([2, 1, 0])
+        result = running_order.find_best_order(allowed_nexts)
+        self.assertEqual(expected_result, result)
+
+    def test_find_best_order_with_desired(self):
+        allowed_nexts = {
+            0: {1},
+            1: {0, 2},
+            2: {1},
+        }
+        desired = [0, 2, 1]
+        expected_result = running_order.SketchOrder([0, 1, 2])
+        result = running_order.find_best_order(allowed_nexts, desired)
+        self.assertEqual(expected_result, result)
+
+    def test_find_best_order_with_anchors(self):
+        allowed_nexts = {
+            0: {1},
+            1: {0, 2},
+            2: {1},
+        }
+        anchors = {0: 0}
+        expected_result = running_order.SketchOrder([0, 1, 2])
+        result = running_order.find_best_order(allowed_nexts, anchors=anchors)
+        self.assertEqual(expected_result, result)
+
+    def test_find_best_order_with_anchors_and_desired(self):
+        allowed_nexts = {
+            0: {1, 2},
+            1: {0, 2},
+            2: {1},
+        }
+        anchors = {0: 0}
+        desired = [0, 2, 1]
+        expected_result = running_order.SketchOrder([0, 2, 1])
+        result = running_order.find_best_order(allowed_nexts, desired, anchors)
+        self.assertEqual(expected_result, result)
+
+
 if __name__ == '__main__':
     unittest.main()

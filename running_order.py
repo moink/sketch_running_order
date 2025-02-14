@@ -37,9 +37,6 @@ class SketchOrder:
             return False
         return all(val1 == val2 for val1, val2 in zip(self.order, other.order))
 
-    def is_full_length(self, num_sketches):
-        return len(self.order) == num_sketches
-
     def possible_next_states(self, allowed_nexts, num_sketches, anchors=None):
         if anchors is None:
             anchors = {}
@@ -61,7 +58,6 @@ class SketchOrder:
                 return set()
 
 
-
 def find_all_orders(allowed_nexts, anchors=None):
     num_sketches = len(allowed_nexts)
     allowed_full_orders = set()
@@ -72,9 +68,26 @@ def find_all_orders(allowed_nexts, anchors=None):
         partial_order = stack.pop()
         candidates = partial_order.possible_next_states(allowed_nexts, num_sketches, anchors)
         for candidate_one_longer in candidates:
-            if candidate_one_longer.is_full_length(num_sketches):
+            if len(candidate_one_longer.order) == num_sketches:
                 allowed_full_orders.add(candidate_one_longer)
             elif candidate_one_longer not in discovered:
                 discovered.add(candidate_one_longer)
                 stack.append(candidate_one_longer)
     return allowed_full_orders
+
+
+def evaluate_cost(candidate, desired):
+    desired_spot = {val: ind for ind, val in enumerate(desired)}
+    actual_spot = {val: ind for ind, val in enumerate(candidate.order)}
+    return sum(abs(actual - desired) for actual, desired in zip(actual_spot.keys(), desired_spot.keys()))
+
+
+def find_best_order(allowed_nexts, desired=None, anchors=None):
+    all_orders = find_all_orders(allowed_nexts, anchors)
+    if desired is None:
+        best_orders = all_orders
+    else:
+        costs = {candidate: evaluate_cost(candidate, desired) for candidate in all_orders}
+        min_cost = min(costs.values())
+        best_orders = {candidate for candidate, cost in costs.items() if cost == min_cost}
+    return list(best_orders)[0]
