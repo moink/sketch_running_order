@@ -1,4 +1,5 @@
 """Choose the optimum running order for a sketch show."""
+
 import itertools
 from collections import defaultdict
 from dataclasses import dataclass
@@ -17,9 +18,74 @@ class Sketch:
         anchored:
             Whether the sketch is required to stay in its currently assigned position.
     """
+
     title: str
     cast: frozenset[str] = frozenset()
     anchored: bool = False
+
+
+def parse_csv(
+    text: str, sep: str = ",", cast_sep: str = " ", header: bool = True
+) -> list[Sketch]:
+    """Parse the text of a csv file to generate a list of sketches.
+
+    Args:
+        text:
+            Text about sketches. Expected to have three columns: title, cast,
+            and anchored.
+        sep:
+            Separator between the columns
+        cast_sep:
+            Separator between the cast members in the cast column
+
+    Returns:
+        The sketches as a list of populated Sketch entries.
+    """
+    result = []
+    if header:
+        first_line = 1
+    else:
+        first_line = 0
+    for line in text.splitlines()[first_line:]:
+        if not line.strip():
+            continue
+        try:
+            title, cast, anchored = line.split(sep)
+        except ValueError:
+            title, cast = line.split(sep)
+            anchored = ""
+        result.append(
+            Sketch(
+                title=title,
+                cast=frozenset(cast.strip().split(cast_sep)),
+                anchored=anchored.lower().strip() == "true",
+            )
+        )
+    return result
+
+
+def optimize_running_order(
+    sketches: list[Sketch], try_to_keep_order=False
+) -> list[Sketch]:
+    """Optimize the running order of the sketches
+
+    Args:
+        sketches:
+            Populated sketches
+        try_to_keep_order:
+            Whether it's desirable to keep the sketches in the given order.
+
+    Returns:
+        The sketches in an optimized order.
+    """
+    allowed_next = get_allowable_next_sketches(sketches)
+    anchors = get_anchors(sketches)
+    if try_to_keep_order:
+        desired = list(range(len(sketches)))
+    else:
+        desired = None
+    solution = find_best_order(allowed_next, anchors, desired)
+    return [sketches[place] for place in solution.order]
 
 
 def get_allowable_next_sketches(sketches: Iterable[Sketch]) -> dict[int, set[int]]:
@@ -36,7 +102,9 @@ def get_allowable_next_sketches(sketches: Iterable[Sketch]) -> dict[int, set[int
             constraints.
     """
     result = defaultdict(set)
-    for ((ind1, sketch1), (ind2, sketch2)) in itertools.product(enumerate(sketches), repeat=2):
+    for (ind1, sketch1), (ind2, sketch2) in itertools.product(
+        enumerate(sketches), repeat=2
+    ):
         if not sketch1.cast.intersection(sketch2.cast):
             result[ind1].add(ind2)
     return dict(result)
@@ -58,9 +126,9 @@ def get_anchors(sketches: Iterable[Sketch]) -> dict[int, int]:
 class SketchOrder:
     """Possible partial or full running order of sketches.
 
-     Contains tools for generating longer viable orders starting with this partial
-     order.
-     """
+    Contains tools for generating longer viable orders starting with this partial
+    order.
+    """
 
     order: list[int]
 
@@ -93,7 +161,7 @@ class SketchOrder:
         self,
         allowed_nexts: dict[int, set[int]],
         num_sketches: int,
-        anchors: dict[int, int] | None = None
+        anchors: dict[int, int] | None = None,
     ) -> set[Self]:
         """Return all viable sketch orders that begin with this sketch order.
 
@@ -119,87 +187,32 @@ class SketchOrder:
             try:
                 return {SketchOrder([anchors[0]])}
             except KeyError:
-                return set(SketchOrder([first_sketch]) for first_sketch in range(num_sketches))
+                return set(
+                    SketchOrder([first_sketch]) for first_sketch in range(num_sketches)
+                )
         last_sketch = self.order[-1]
         try:
             next_sketch = anchors[len(self.order)]
         except KeyError:
             allowed_next = allowed_nexts[last_sketch].difference(self.order)
-            return {SketchOrder(self.order + [next_sketch]) for next_sketch in allowed_next}
+            return {
+                SketchOrder(self.order + [next_sketch]) for next_sketch in allowed_next
+            }
         else:
-            if next_sketch in allowed_nexts[last_sketch] and next_sketch not in self.order:
+            if (
+                next_sketch in allowed_nexts[last_sketch]
+                and next_sketch not in self.order
+            ):
                 return {SketchOrder(self.order + [next_sketch])}
             else:
                 return set()
 
 
-def find_all_orders(
-        allowed_nexts: dict[int, set[int]],
-        anchors: dict[int, int] | None = None
-) -> set[SketchOrder]:
-    """Find all viable sketch run orders considering the casting constraints and anchors.
-
-    Args:
-        allowed_nexts:
-            The key is a sketch number and the value is the set of all sketch
-            numbers that are permitted to be immediately after that sketch
-            according the casting or other constraints.
-        anchors:
-            Sketches that are required to be in a set position in the sequence.
-            The key is the position the sketch is required to be in, and the
-            value is the sketch number of the sketch required to be there.
-
-    Returns:
-        All full-length (includes all sketches) running orders that follow both sets
-        of constraints passed as arguments.
-    """
-    num_sketches = len(allowed_nexts)
-    allowed_full_orders = set()
-    empty_order = SketchOrder([])
-    stack = [empty_order]
-    discovered = {empty_order}
-    while stack:
-        partial_order = stack.pop()
-        candidates = partial_order.possible_next_states(allowed_nexts, num_sketches, anchors)
-        for candidate_one_longer in candidates:
-            if len(candidate_one_longer.order) == num_sketches:
-                allowed_full_orders.add(candidate_one_longer)
-            elif candidate_one_longer not in discovered:
-                discovered.add(candidate_one_longer)
-                stack.append(candidate_one_longer)
-    return allowed_full_orders
-
-
-def evaluate_cost(candidate: SketchOrder, desired: list[int]) -> int:
-    """Get the distance between a sketch order and a desired sketch order.
-
-    Args:
-        candidate:
-            Candidate full sketch order to be evaluated.
-        desired:
-            Preferences for order of sketches if constraints were not active.
-            Closeness to this order is considered preferable (returns low costs).
-            Example [2, 1, 0] if, ignoring constraints, the user would prefer sketch
-            number 2 to be the first sketch, 1 to be the second, and 0 to be the third.
-
-    Returns:
-        cost:
-            Sum of the absolute distances between a sketches position and it's
-            desired position.
-    """
-    desired_spot = {val: ind for ind, val in enumerate(desired)}
-    actual_spot = {val: ind for ind, val in enumerate(candidate.order)}
-    return sum(
-        abs(actual - desired)
-        for actual, desired in zip(actual_spot.keys(), desired_spot.keys())
-    )
-
-
 def find_best_order(
-        allowed_nexts: dict[int, set[int]],
-        anchors: dict[int, int] | None = None,
-        desired: list[int] | None = None,
-    ) -> SketchOrder:
+    allowed_nexts: dict[int, set[int]],
+    anchors: dict[int, int] | None = None,
+    desired: list[int] | None = None,
+) -> SketchOrder:
     """Find one best order giving constraints and possibly a desired order.
 
     Args:
@@ -239,3 +252,64 @@ def find_best_order(
     return list(best_orders)[0]
 
 
+def find_all_orders(
+    allowed_nexts: dict[int, set[int]], anchors: dict[int, int] | None = None
+) -> set[SketchOrder]:
+    """Find all viable sketch run orders considering the casting constraints and anchors.
+
+    Args:
+        allowed_nexts:
+            The key is a sketch number and the value is the set of all sketch
+            numbers that are permitted to be immediately after that sketch
+            according the casting or other constraints.
+        anchors:
+            Sketches that are required to be in a set position in the sequence.
+            The key is the position the sketch is required to be in, and the
+            value is the sketch number of the sketch required to be there.
+
+    Returns:
+        All full-length (includes all sketches) running orders that follow both sets
+        of constraints passed as arguments.
+    """
+    num_sketches = len(allowed_nexts)
+    allowed_full_orders = set()
+    empty_order = SketchOrder([])
+    stack = [empty_order]
+    discovered = {empty_order}
+    while stack:
+        partial_order = stack.pop()
+        candidates = partial_order.possible_next_states(
+            allowed_nexts, num_sketches, anchors
+        )
+        for candidate_one_longer in candidates:
+            if len(candidate_one_longer.order) == num_sketches:
+                allowed_full_orders.add(candidate_one_longer)
+            elif candidate_one_longer not in discovered:
+                discovered.add(candidate_one_longer)
+                stack.append(candidate_one_longer)
+    return allowed_full_orders
+
+
+def evaluate_cost(candidate: SketchOrder, desired: list[int]) -> int:
+    """Get the distance between a sketch order and a desired sketch order.
+
+    Args:
+        candidate:
+            Candidate full sketch order to be evaluated.
+        desired:
+            Preferences for order of sketches if constraints were not active.
+            Closeness to this order is considered preferable (returns low costs).
+            Example [2, 1, 0] if, ignoring constraints, the user would prefer sketch
+            number 2 to be the first sketch, 1 to be the second, and 0 to be the third.
+
+    Returns:
+        cost:
+            Sum of the absolute distances between a sketches position and it's
+            desired position.
+    """
+    desired_spot = {val: ind for ind, val in enumerate(desired)}
+    actual_spot = {val: ind for ind, val in enumerate(candidate.order)}
+    return sum(
+        abs(actual - desired)
+        for actual, desired in zip(actual_spot.keys(), desired_spot.keys())
+    )

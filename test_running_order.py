@@ -1,8 +1,69 @@
 """Tests for the running_order.py module."""
 
 import unittest
+from textwrap import dedent
 
 import running_order
+
+
+class TestParseCsv(unittest.TestCase):
+    """Tests for the parse_csv function."""
+
+    def test_parse_csv(self):
+        """Test three sketches with casts and mix of anchored present and missing."""
+        test_text = dedent(
+            """\
+        Title, Cast, Anchored
+        Jedi Warrior, Adrian Richie Michele, True
+        I am the boss, Theresa Rocio
+        It's just me, Adrian, False
+        """
+        )  # deliberately left out the 3rd parameter in line 2, it's optional
+        sketch1 = running_order.Sketch(
+            "Jedi Warrior", frozenset({"Adrian", "Richie", "Michele"}), True
+        )
+        sketch2 = running_order.Sketch(
+            "I am the boss", frozenset({"Theresa", "Rocio"}), False
+        )
+        sketch3 = running_order.Sketch("It's just me", frozenset({"Adrian"}), False)
+        expected_result = [sketch1, sketch2, sketch3]
+        result = running_order.parse_csv(test_text)
+        self.assertEqual(expected_result, result)
+
+
+class TestOptimizeRunningOrder(unittest.TestCase):
+    """Tests for the optimize_running_order function."""
+
+    def test_casting_constraints_only(self):
+        """Test optimizing the running order with only casting constraints."""
+        sketch1 = running_order.Sketch("Jedi Warrior", {"Adrian", "Richie", "Michele"})
+        sketch2 = running_order.Sketch("I am the boss", {"Theresa", "Rocio"})
+        sketch3 = running_order.Sketch("It's just me", {"Adrian"})
+        result = running_order.optimize_running_order([sketch1, sketch2, sketch3])
+        expected_result = [sketch3, sketch2, sketch1]
+        self.assertEqual(expected_result, result)
+
+    def test_with_anchor(self):
+        """Use both casting constraints and an anchored sketch."""
+        sketch1 = running_order.Sketch(
+            "Jedi Warrior", {"Adrian", "Richie", "Michele"}, anchored=True
+        )
+        sketch2 = running_order.Sketch("I am the boss", {"Theresa", "Rocio"})
+        sketch3 = running_order.Sketch("It's just me", {"Adrian"})
+        result = running_order.optimize_running_order([sketch1, sketch2, sketch3])
+        expected_result = [sketch1, sketch2, sketch3]
+        self.assertEqual(expected_result, result)
+
+    def test_with_try_to_keep_order(self):
+        """Use casting constraints and an attempt to maintain the given order"""
+        sketch1 = running_order.Sketch("Jedi Warrior", {"Adrian", "Richie", "Michele"})
+        sketch2 = running_order.Sketch("I am the boss", {"Theresa", "Rocio"})
+        sketch3 = running_order.Sketch("It's just me", {"Adrian"})
+        result = running_order.optimize_running_order(
+            [sketch1, sketch2, sketch3], try_to_keep_order=True
+        )
+        expected_result = [sketch1, sketch2, sketch3]
+        self.assertEqual(expected_result, result)
 
 
 class TestGetAllowableNextSketches(unittest.TestCase):
@@ -70,7 +131,7 @@ class TestSketchOrder(unittest.TestCase):
         }
         expected_result = {
             running_order.SketchOrder([1, 0, 2]),
-            running_order.SketchOrder([1, 0, 3])
+            running_order.SketchOrder([1, 0, 3]),
         }
         result = order.possible_next_states(allowed_nexts, 3)
         self.assertEqual(expected_result, result)
@@ -84,9 +145,7 @@ class TestSketchOrder(unittest.TestCase):
             1: {0, 2},
             2: {1},
         }
-        expected_result = {
-            running_order.SketchOrder([1])
-        }
+        expected_result = {running_order.SketchOrder([1])}
         result = order.possible_next_states(allowed_nexts, 3, anchors)
         self.assertEqual(expected_result, result)
 
@@ -95,9 +154,7 @@ class TestSketchOrder(unittest.TestCase):
         anchors = {2: 0}
         order = running_order.SketchOrder([1, 2])
         allowed_nexts = {2: {0, 3}}
-        expected_result = {
-            running_order.SketchOrder([1, 2, 0])
-        }
+        expected_result = {running_order.SketchOrder([1, 2, 0])}
         result = order.possible_next_states(allowed_nexts, 4, anchors)
         self.assertEqual(expected_result, result)
 
@@ -234,5 +291,5 @@ class TestFindBestOrder(unittest.TestCase):
         self.assertEqual(expected_result, result)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()
