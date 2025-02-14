@@ -1,17 +1,19 @@
-import collections
+"""Choose the optimum running order for a sketch show."""
 import itertools
 from collections import defaultdict
 from dataclasses import dataclass
+from typing import Iterable, Self
 
 
 @dataclass
 class Sketch:
+    """A sketch close to how it could be imported from a file or a UI."""
     title: str
     cast: frozenset[str] = frozenset()
-    lateness_weight: float = 0.0
 
 
 def get_allowable_next_sketches(sketches):
+    """Get all sketches that can follow each sketch in a convenient form for numerical optimization."""
     result = defaultdict(set)
     for ((ind1, sketch1), (ind2, sketch2)) in itertools.product(enumerate(sketches), repeat=2):
         if not sketch1.cast.intersection(sketch2.cast):
@@ -20,24 +22,63 @@ def get_allowable_next_sketches(sketches):
 
 
 class SketchOrder:
+    """Possible partial or full running order of sketches.
+
+     Contains tools for generating longer viable orders starting with this partial
+     order.
+     """
 
     order: list[int]
 
-    def __init__(self, sketches):
+    def __init__(self, sketches: Iterable[int]):
+        """Create a sketch order.
+
+        Args:
+            sketches: Order (partial or full) of sketches, indexed by integer. For
+            example, the empty list [] indicates no sketches in the order as of yet.
+            [3] is a partial order with sketch 3 as the only sketch. [4, 2, 15] is a
+            partial order with sketch 4 first, 2 second, and 15 third.
+        """
         self.order = list(sketches)
 
-    def __hash__(self):
+    def __hash__(self) -> int:
+        """Create a hash of this sketch order."""
         return hash(tuple(self.order))
 
-    def __repr__(self):
+    def __repr__(self) -> str:
+        """Pretty print this sketch order for debugging."""
         return f"Sketch Order: {','.join(str(sketch) for sketch in self.order)}"
 
-    def __eq__(self, other):
+    def __eq__(self, other: Self) -> bool:
+        """Evaluate equality with another sketch order."""
         if len(self.order) != len(other.order):
             return False
         return all(val1 == val2 for val1, val2 in zip(self.order, other.order))
 
-    def possible_next_states(self, allowed_nexts, num_sketches, anchors=None):
+    def possible_next_states(
+        self,
+        allowed_nexts: dict[int, set[int]],
+        num_sketches: int,
+        anchors: dict[int, int] | None = None
+    ) -> set[Self]:
+        """Return all viable sketch orders that begin with this sketch order.
+
+        Args:
+            allowed_nexts:
+                The key is a sketch number and the value is the set of all sketch
+                numbers that are permitted to be immediately after that sketch
+                according the casting or other constraints.
+            num_sketches:
+                Total number of sketches in the show
+            anchors:
+                Sketches that are required to be in a set position in the sequence.
+                The key is the position the sketch is required to be in, and the
+                value is the sketch number of the sketch required to be there.
+
+        Returns:
+            All partial sketch orders one longer than this sketch order that comply
+            with the allowed_nexts and anchors constraints.
+        """
         if anchors is None:
             anchors = {}
         if not self.order:
@@ -58,7 +99,26 @@ class SketchOrder:
                 return set()
 
 
-def find_all_orders(allowed_nexts, anchors=None):
+def find_all_orders(
+        allowed_nexts: dict[int, set[int]],
+        anchors: dict[int, int] | None = None
+) -> set[SketchOrder]:
+    """Find all viable sketch run orders considering the casting constraints and anchors.
+
+    Args:
+        allowed_nexts:
+            The key is a sketch number and the value is the set of all sketch
+            numbers that are permitted to be immediately after that sketch
+            according the casting or other constraints.
+        anchors:
+            Sketches that are required to be in a set position in the sequence.
+            The key is the position the sketch is required to be in, and the
+            value is the sketch number of the sketch required to be there.
+
+    Returns:
+        All full-length (includes all sketches) running orders that follow both sets
+        of constraints passed as arguments.
+    """
     num_sketches = len(allowed_nexts)
     allowed_full_orders = set()
     empty_order = SketchOrder([])
@@ -76,18 +136,70 @@ def find_all_orders(allowed_nexts, anchors=None):
     return allowed_full_orders
 
 
-def evaluate_cost(candidate, desired):
+def evaluate_cost(candidate: SketchOrder, desired: list[int]) -> int:
+    """Get the distance between a sketch order and a desired sketch order.
+
+    Args:
+        candidate:
+            Candidate full sketch order to be evaluated.
+        desired:
+            Preferences for order of sketches if constraints were not active.
+            Closeness to this order is considered preferable (returns low costs).
+            Example [2, 1, 0] if, ignoring constraints, the user would prefer sketch
+            number 2 to be the first sketch, 1 to be the second, and 0 to be the third.
+
+    Returns:
+        cost:
+            Sum of the absolute distances between a sketches position and it's
+            desired position.
+    """
     desired_spot = {val: ind for ind, val in enumerate(desired)}
     actual_spot = {val: ind for ind, val in enumerate(candidate.order)}
-    return sum(abs(actual - desired) for actual, desired in zip(actual_spot.keys(), desired_spot.keys()))
+    return sum(
+        abs(actual - desired)
+        for actual, desired in zip(actual_spot.keys(), desired_spot.keys())
+    )
 
 
-def find_best_order(allowed_nexts, desired=None, anchors=None):
+def find_best_order(
+        allowed_nexts: dict[int, set[int]],
+        anchors: dict[int, int] | None = None,
+        desired: list[int] | None = None,
+    ) -> SketchOrder:
+    """Find one best order giving constraints and possibly a desired order.
+
+    Args:
+        allowed_nexts:
+            The key is a sketch number and the value is the set of all sketch
+            numbers that are permitted to be immediately after that sketch
+            according the casting or other constraints.
+        anchors:
+            Sketches that are required to be in a set position in the sequence.
+            The key is the position the sketch is required to be in, and the
+            value is the sketch number of the sketch required to be there.
+        desired:
+            Preferences for order of sketches if constraints were not active.
+            Closeness to this order is considered preferable (returns low costs).
+            Example [2, 1, 0] if, ignoring constraints, the user would prefer sketch
+            number 2 to be the first sketch, 1 to be the second, and 0 to be the third.
+
+    Returns:
+        The running order that follows the constraints that is closest to the desired
+        order. If there is more than one such sketch order it will choose one at random.
+
+    Raises:
+        IndexError
+            If there is no running order that fits the constraints.
+    """
     all_orders = find_all_orders(allowed_nexts, anchors)
     if desired is None:
         best_orders = all_orders
     else:
-        costs = {candidate: evaluate_cost(candidate, desired) for candidate in all_orders}
+        costs = {
+            candidate: evaluate_cost(candidate, desired) for candidate in all_orders
+        }
         min_cost = min(costs.values())
-        best_orders = {candidate for candidate, cost in costs.items() if cost == min_cost}
+        best_orders = {
+            candidate for candidate, cost in costs.items() if cost == min_cost
+        }
     return list(best_orders)[0]
