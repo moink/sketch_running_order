@@ -317,64 +317,122 @@ def evaluate_cost(candidate: SketchOrder, desired: list[int]) -> int:
 
 
 # %% Greedy algorithm
-def make_player_indicence_matrix(sketches: Iterable[Sketch]):
-    all_players = list(
-        set(itertools.chain.from_iterable({x.cast for x in sketches})))
-    
+def make_player_incidence_matrix(sketches: Iterable[Sketch]) -> list[list[int]]:
+    """Create a matrix showing which players are in which sketches.
+
+    Args:
+        sketches: List of sketches with cast information
+
+    Returns:
+        A matrix where:
+        - Each row represents a player
+        - Each column represents a sketch
+        - Matrix[i][j] is 1 if player i is in sketch j, 0 otherwise
+    """
+    all_players = list(set(itertools.chain.from_iterable(x.cast for x in sketches)))
     return [[int(x in y.cast) for y in sketches] for x in all_players]
 
 
-def make_sketch_overlap_matrix(sketches):
-    mat = np.array(make_player_indicence_matrix(sketches))
+def make_sketch_overlap_matrix(sketches: Iterable[Sketch]) -> np.ndarray:
+    """Create a matrix showing cast overlap between sketches.
+
+    Args:
+        sketches: List of sketches with cast information
+
+    Returns:
+        A square matrix where entry [i,j] represents the number of
+        cast members that sketches i and j have in common
+    """
+    mat = np.array(make_player_incidence_matrix(sketches))
     return mat.T @ mat
 
 
-def calc_order_overlap(overlap_mat, candidate: SketchOrder):
-    return sum([overlap_mat[i, j] for i, j in itertools.pairwise(candidate.order)])
+def calc_order_overlap(overlap_mat: np.ndarray, candidate: SketchOrder) -> int:
+    """Calculate total cast overlap between adjacent sketches in an order.
+
+    Args:
+        overlap_mat: Matrix of cast overlaps between sketches
+        candidate: A potential running order to evaluate
+
+    Returns:
+        Sum of cast overlaps between consecutive sketches in the order
+    """
+    return sum(overlap_mat[i, j] for i, j in itertools.pairwise(candidate.order))
 
 
-def find_best_swap(overlap_mat, sketch_order: SketchOrder,
-                   desired: SketchOrder = None):
-    # Find swap that minimises cast overlap. If there are ties, choose the swap
-    # that keeps order closest to desired
-    # TODO include anchors
+def find_best_swap(
+    overlap_mat: np.ndarray,
+    sketch_order: SketchOrder,
+    desired: list[int]
+) -> tuple[SketchOrder, int, int]:
+    """Find the best swap of two sketches that minimizes cast overlap.
+
+    Args:
+        overlap_mat: Matrix of cast overlaps between sketches
+        sketch_order: Current running order
+        desired: Optional target order to try to maintain
+
+    Returns:
+        Tuple of:
+        - Best order found after swapping
+        - Total cast overlap in that order
+        - Cost (distance from desired order, if provided)
+    """
     best_overlap = calc_order_overlap(overlap_mat, sketch_order)
     best_order = sketch_order
-    best_cost = 10000000
+    best_cost = float("inf")
+    if desired is SketchOrder:
+        desired = desired.order
     for i in range(len(sketch_order.order) - 1):
-        for j in range(i+1, len(sketch_order.order)):
-            # Ugh this is very ugly, clean up
-            new_order = SketchOrder(sketch_order.order)  # copy
-            new_order.order[i], new_order.order[j] = \
-                new_order.order[j], new_order.order[i]
+        for j in range(i + 1, len(sketch_order.order)):
+            new_order = SketchOrder(sketch_order.order.copy())  # Added .copy()
+            new_order.order[i], new_order.order[j] = (
+                new_order.order[j],
+                new_order.order[i],
+            )
             new_overlap = calc_order_overlap(overlap_mat, new_order)
-            new_cost = best_cost if desired is None else \
-                evaluate_cost(desired, new_order.order)
+            new_cost = (
+                best_cost if desired is None else evaluate_cost(new_order, desired)
+            )
             if (new_overlap < best_overlap) or (
-                    (new_overlap == best_overlap) and (new_cost < best_cost)):
+                (new_overlap == best_overlap) and (new_cost < best_cost)
+            ):
                 best_overlap = new_overlap
                 best_order = new_order
                 best_cost = new_cost
     return best_order, best_overlap, best_cost
-                   
 
-def greedy_algo(overlap_mat, candidate: SketchOrder,
-                desired: SketchOrder = None):
-    # TODO add some level of annealing/decreasing randomness
-    # TODO Repeated logic here and in find_best_swap, could maybe extract common code
+
+def greedy_algo(
+    overlap_mat: np.ndarray, candidate: SketchOrder, desired: SketchOrder | None = None
+) -> SketchOrder:
+    """Find a locally optimal running order using a greedy algorithm.
+
+    Repeatedly swaps pairs of sketches to reduce cast overlap between
+    adjacent sketches. If a desired order is provided, uses it as a
+    tiebreaker when multiple swaps give the same overlap reduction.
+
+    Args:
+        overlap_mat: Matrix of cast overlaps between sketches
+        candidate: Initial running order
+        desired: Optional target order to try to maintain
+
+    Returns:
+        A locally optimal running order
+    """
     best_overlap = calc_order_overlap(overlap_mat, candidate)
     best_order = candidate
-    best_cost = 10000000
-    while True:  # Ugh
-        print('Current best overlap', best_overlap)
+    best_cost = float("inf")  # Changed from 10000000
+    while True:
+        print(f"Current best overlap: {best_overlap}")
         new_order, new_overlap, new_cost = find_best_swap(
-            overlap_mat, best_order, desired)
+            overlap_mat, best_order, desired
+        )
         if (new_overlap < best_overlap) or (
-                (new_overlap == best_overlap) and (new_cost < best_cost)):
+            (new_overlap == best_overlap) and (new_cost < best_cost)
+        ):
             best_overlap = new_overlap
             best_order = new_order
             best_cost = new_cost
         else:
             return best_order
-
-        
