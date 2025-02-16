@@ -1,9 +1,167 @@
 """Tests for the running_order.py module."""
 
+import os.path
+import re
 import unittest
+from argparse import Namespace
 from textwrap import dedent
 
+from pdf2image import convert_from_path
+from PIL import ImageChops
+
 import running_order
+
+TEST_DATA_DIR = os.path.join(os.path.dirname(__file__), "test_data")
+
+
+class FileCleanupTestCase(unittest.TestCase):
+    """Base class for tests that need to clean up output files."""
+
+    output_filename = os.path.join(TEST_DATA_DIR, "test_output.pdf")
+
+    def delete_written_file_if_exists(self):
+        """Delete the test output file if it exists before running tests."""
+        if os.path.exists(self.output_filename):
+            os.remove(self.output_filename)
+
+    def setUp(self):
+        """Set up test by ensuring output file doesn't exist."""
+        self.delete_written_file_if_exists()
+
+    def tearDown(self):
+        """Clean up by deleting output file."""
+        self.delete_written_file_if_exists()
+
+
+class TestMain(FileCleanupTestCase):
+    """Tests for the main function."""
+
+    def test_main(self):
+        """Test the main function using test data from CSV file."""
+        test_input = os.path.join(TEST_DATA_DIR, "main_test_input.csv")
+        expected_output = os.path.join(TEST_DATA_DIR, "expected_main_output.pdf")
+        running_order.main(["-f", test_input, "-o", self.output_filename])
+        self.assertTrue(pdfs_look_same(expected_output, self.output_filename))
+
+
+class TestWriteRunningOrderToPDF(FileCleanupTestCase):
+    """Tests for the generate_output function."""
+
+    def test_write_running_order_to_pdf(self):
+        """Test a simple version with three sketches."""
+        sketch1 = running_order.Sketch(
+            "Jedi Warrior", frozenset({"Adrian", "Richie", "Michele"}), True
+        )
+        sketch2 = running_order.Sketch(
+            "I am the boss", frozenset({"Theresa", "Rocio"}), False
+        )
+        sketch3 = running_order.Sketch("It's just me", frozenset({"Adrian"}), False)
+        order = [sketch1, sketch2, sketch3]
+        expected_filename = os.path.join(
+            TEST_DATA_DIR, "expected_output_test_output.pdf"
+        )
+        running_order.write_running_order_to_pdf(order, self.output_filename)
+        self.assertTrue(pdfs_look_same(expected_filename, self.output_filename))
+
+
+def pdfs_look_same(pdf1, pdf2, dpi=150):
+    """Return True if the PDFs have the same appearance."""
+    images1 = convert_from_path(pdf1, dpi=dpi)
+    images2 = convert_from_path(pdf2, dpi=dpi)
+    if len(images1) != len(images2):
+        return False
+    for img1, img2 in zip(images1, images2):
+        diff = ImageChops.difference(img1, img2)
+        bbox = diff.getbbox()
+        if bbox is not None:
+            return False
+    return True
+
+
+class TestParseCommandLineArgs(unittest.TestCase):
+    """Tests for the parse_command_line_args function."""
+
+    def test_parse_no_args(self):
+        """Test when nor arguments are passed."""
+        expected_result = Namespace(
+            filename="casting.csv",
+            output_filename="running_order.csv",
+            dont_try_to_keep_order=False,
+            column_sep=",",
+            cast_sep=" ",
+        )
+        result = running_order.parse_args([])
+        self.assertEqual(expected_result, result)
+
+    def test_parse_filename(self):
+        """Test when only passing the filename."""
+        expected_result = Namespace(
+            filename="poop.csv",
+            output_filename="running_order.csv",
+            dont_try_to_keep_order=False,
+            column_sep=",",
+            cast_sep=" ",
+        )
+        result = running_order.parse_args(["-f", "poop.csv"])
+        self.assertEqual(expected_result, result)
+
+    def test_parse_dont_try_to_keep_order(self):
+        """Test when passing the -d flag."""
+        expected_result = Namespace(
+            filename="casting.csv",
+            output_filename="running_order.csv",
+            dont_try_to_keep_order=True,
+            column_sep=",",
+            cast_sep=" ",
+        )
+        result = running_order.parse_args(["-d"])
+        self.assertEqual(expected_result, result)
+
+    def test_parse_column_sep(self):
+        """Test changing the column separator."""
+        expected_result = Namespace(
+            filename="casting.csv",
+            output_filename="running_order.csv",
+            dont_try_to_keep_order=False,
+            column_sep=";",
+            cast_sep=" ",
+        )
+        result = running_order.parse_args(["--column_sep", ";"])
+        self.assertEqual(expected_result, result)
+
+    def test_parse_cast_sep(self):
+        """Test changing the cast separator."""
+        expected_result = Namespace(
+            filename="casting.csv",
+            output_filename="running_order.csv",
+            dont_try_to_keep_order=False,
+            column_sep=",",
+            cast_sep=";",
+        )
+        result = running_order.parse_args(["-c", ";"])
+        self.assertEqual(expected_result, result)
+
+    def test_parse_all(self):
+        """Test when all CLI arguments are passed."""
+        expected_result = Namespace(
+            filename="poop.csv",
+            output_filename="you're an eight.csv",
+            dont_try_to_keep_order=True,
+            column_sep=";",
+            cast_sep=",",
+        )
+        result = running_order.parse_args(
+            ["-f", "poop.csv", "-o", "you're an eight.csv", "-d", "-s", ";", "-c", ","]
+        )
+        self.assertEqual(expected_result, result)
+
+    def test_raise_if_column_and_cast_sep_the_same(self):
+        """Test that an error is raised when column and cast separators are the same."""
+        expected_msg = re.escape(
+            "Column separator and cast separator cannot be the same character."
+        )
+        with self.assertRaisesRegex(ValueError, expected_msg):
+            running_order.parse_args(["-c", ","])
 
 
 class TestParseCsv(unittest.TestCase):
@@ -13,11 +171,11 @@ class TestParseCsv(unittest.TestCase):
         """Test three sketches with casts and mix of anchored present and missing."""
         test_text = dedent(
             """\
-        Title, Cast, Anchored
-        Jedi Warrior, Adrian Richie Michele, True
-        I am the boss, Theresa Rocio
-        It's just me, Adrian, False
-        """
+            Title, Cast, Anchored
+            Jedi Warrior, Adrian Richie Michele, True
+            I am the boss, Theresa Rocio
+            It's just me, Adrian, False
+            """
         )  # deliberately left out the 3rd parameter in line 2, it's optional
         sketch1 = running_order.Sketch(
             "Jedi Warrior", frozenset({"Adrian", "Richie", "Michele"}), True

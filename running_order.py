@@ -1,9 +1,20 @@
 """Choose the optimum running order for a sketch show."""
 
 import itertools
+import sys
+from argparse import ArgumentParser, Namespace
 from collections import defaultdict
 from dataclasses import dataclass
 from typing import Iterable, Self
+
+from fpdf import FPDF
+
+OUTPUT_PDF_FONT = "Helvetica"
+OUTPUT_PDF_TITLE_FONT_SIZE = 18
+OUTPUT_PDF_CAST_FONT_SIZE = 12
+OUTPUT_PDF_TITLE_CELL_HEIGHT = 10
+OUTPUT_PDF_CAST_CELL_HEIGHT = 8
+OUTPUT_PDF_SPACE_BETWEEN_SKETCHES = 10
 
 
 @dataclass
@@ -24,6 +35,53 @@ class Sketch:
     anchored: bool = False
 
 
+def main(cli_args):
+    """Read input file, optimize running order, and write result to pdf."""
+    args = parse_args(cli_args)
+    with open(args.filename, encoding="utf-8") as input_file:
+        contents = input_file.read()
+    sketches = parse_csv(contents)
+    order = optimize_running_order(sketches)
+    write_running_order_to_pdf(order, args.output_filename)
+
+
+def write_running_order_to_pdf(sketches, filename):
+    """Write the running order to a formatted PDF file."""
+    pdf = FPDF()
+    pdf.set_auto_page_break(auto=True, margin=15)
+    pdf.add_page()
+    for i, sketch in enumerate(sketches, start=1):
+        pdf.set_font(OUTPUT_PDF_FONT, style="B", size=OUTPUT_PDF_TITLE_FONT_SIZE)
+        pdf.cell(
+            0, OUTPUT_PDF_TITLE_CELL_HEIGHT, f"{i}. {sketch.title}", ln=True, align="C"
+        )
+        pdf.set_font(OUTPUT_PDF_FONT, size=OUTPUT_PDF_CAST_FONT_SIZE)
+        cast_text = ", ".join(sorted(sketch.cast))
+        pdf.cell(0, OUTPUT_PDF_CAST_CELL_HEIGHT, cast_text, ln=True, align="C")
+        pdf.ln(OUTPUT_PDF_SPACE_BETWEEN_SKETCHES)
+    pdf.output(filename)
+
+
+def parse_args(cli_args: list[str]) -> Namespace:
+    """Parse the command-line arguments."""
+    parser = ArgumentParser(description="Find optimal running order for sketch shows.")
+    parser.add_argument("-f", "--filename", nargs="?", default="casting.csv")
+    parser.add_argument(
+        "-o", "--output_filename", nargs="?", default="running_order.csv"
+    )
+    parser.add_argument(
+        "-d", "--dont_try_to_keep_order", action="store_true", default=False
+    )
+    parser.add_argument("-s", "--column_sep", nargs="?", default=",")
+    parser.add_argument("-c", "--cast_sep", nargs="?", default=" ")
+    args = parser.parse_args(cli_args)
+    if args.column_sep == args.cast_sep:
+        raise ValueError(
+            "Column separator and cast separator cannot be the same character."
+        )
+    return args
+
+
 def parse_csv(
     text: str, sep: str = ",", cast_sep: str = " ", header: bool = True
 ) -> list[Sketch]:
@@ -34,9 +92,11 @@ def parse_csv(
             Text about sketches. Expected to have three columns: title, cast,
             and anchored.
         sep:
-            Separator between the columns
+            Separator between the columns.
         cast_sep:
-            Separator between the cast members in the cast column
+            Separator between the cast members in the cast column.
+        header:
+            Whether the text contains a header line.
 
     Returns:
         The sketches as a list of populated Sketch entries.
@@ -137,7 +197,7 @@ class SketchOrder:
 
         Args:
             sketches: Order (partial or full) of sketches, indexed by integer. For
-            example, the empty list [] indicates no sketches in the order as of yet.
+            example, the empty list [] indicates no sketches in the order as yet.
             [3] is a partial order with sketch 3 as the only sketch. [4, 2, 15] is a
             partial order with sketch 4 first, 2 second, and 15 third.
         """
@@ -198,14 +258,9 @@ class SketchOrder:
             return {
                 SketchOrder(self.order + [next_sketch]) for next_sketch in allowed_next
             }
-        else:
-            if (
-                next_sketch in allowed_nexts[last_sketch]
-                and next_sketch not in self.order
-            ):
-                return {SketchOrder(self.order + [next_sketch])}
-            else:
-                return set()
+        if next_sketch in allowed_nexts[last_sketch] and next_sketch not in self.order:
+            return {SketchOrder(self.order + [next_sketch])}
+        return set()
 
 
 def find_best_order(
@@ -255,7 +310,7 @@ def find_best_order(
 def find_all_orders(
     allowed_nexts: dict[int, set[int]], anchors: dict[int, int] | None = None
 ) -> set[SketchOrder]:
-    """Find all viable sketch run orders considering the casting constraints and anchors.
+    """Find all viable run orders considering the casting constraints and anchors.
 
     Args:
         allowed_nexts:
@@ -304,7 +359,7 @@ def evaluate_cost(candidate: SketchOrder, desired: list[int]) -> int:
 
     Returns:
         cost:
-            Sum of the absolute distances between a sketches position and it's
+            Sum of the absolute distances between a sketch's position and its
             desired position.
     """
     desired_spot = {val: ind for ind, val in enumerate(desired)}
@@ -313,3 +368,7 @@ def evaluate_cost(candidate: SketchOrder, desired: list[int]) -> int:
         abs(actual - desired)
         for actual, desired in zip(actual_spot.keys(), desired_spot.keys())
     )
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])
