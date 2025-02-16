@@ -2,12 +2,14 @@
 
 import itertools
 import sys
-from argparse import ArgumentParser, Namespace
+from argparse import ArgumentParser, Namespace, ArgumentDefaultsHelpFormatter
 from collections import defaultdict
 from dataclasses import dataclass
 from typing import Iterable, Self
 
 from fpdf import FPDF
+
+PROGRESS_UPDATE_FREQUENCY = 10
 
 
 @dataclass
@@ -22,6 +24,7 @@ class PdfConfig:
         cast_cell_height: Height of cells containing cast lists
         space_between_sketches: Vertical space between sketch entries
     """
+
     font: str = "Helvetica"
     title_font_size: int = 18
     cast_font_size: int = 12
@@ -47,52 +50,69 @@ class Sketch:
     cast: frozenset[str] = frozenset()
     anchored: bool = False
 
+    def __post_init__(self):
+        """Validate sketch data after initialization."""
+        self.cast = frozenset(self.cast)
+        if not self.title.strip():
+            raise ValueError("Sketch title cannot be empty")
+
 
 def main(cli_args):
     """Read input file, optimize running order, and write result to pdf."""
     args = parse_args(cli_args)
-    with open(args.filename, encoding="utf-8") as input_file:
-        contents = input_file.read()
-    sketches = parse_csv(contents)
+    lines = read_and_validate_csv(args.filename, args.column_sep)
+    sketches = parse_csv(lines, args.column_sep, args.cast_sep)
     order = optimize_running_order(sketches)
     write_running_order_to_pdf(order, args.output_filename)
 
 
-def write_running_order_to_pdf(sketches, filename, config: PdfConfig = PdfConfig()):
-    """Write the running order to a formatted PDF file.
+def parse_args(cli_args: list[str]) -> Namespace:
+    """Parse the command-line arguments.
 
     Args:
-        sketches: List of sketches to include in the running order
-        filename: Name of the output PDF file
-        config: PDF formatting configuration settings
+        cli_args: List of command-line arguments
+
+    Returns:
+        Parsed argument namespace
+
+    Example:
+        $ python running_order.py -f input.csv -o output.pdf
+        $ python running_order.py --dont_try_to_keep_order -f input.csv
     """
-    pdf = FPDF()
-    pdf.set_auto_page_break(auto=True, margin=15)
-    pdf.add_page()
-    for i, sketch in enumerate(sketches, start=1):
-        pdf.set_font(config.font, style="B", size=config.title_font_size)
-        pdf.cell(
-            0, config.title_cell_height, f"{i}. {sketch.title}", ln=True, align="C"
-        )
-        pdf.set_font(config.font, size=config.cast_font_size)
-        cast_text = ", ".join(sorted(sketch.cast))
-        pdf.cell(0, config.cast_cell_height, cast_text, ln=True, align="C")
-        pdf.ln(config.space_between_sketches)
-    pdf.output(filename)
-
-
-def parse_args(cli_args: list[str]) -> Namespace:
-    """Parse the command-line arguments."""
-    parser = ArgumentParser(description="Find optimal running order for sketch shows.")
-    parser.add_argument("-f", "--filename", nargs="?", default="casting.csv")
-    parser.add_argument(
-        "-o", "--output_filename", nargs="?", default="running_order.csv"
+    parser = ArgumentParser(
+        description="Find optimal running order for sketch shows.",
+        epilog="""
+        Example usage:
+          %(prog)s -f input.csv -o output.pdf
+          %(prog)s --dont_try_to_keep_order -f input.csv
+        """,
+        formatter_class=ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument(
-        "-d", "--dont_try_to_keep_order", action="store_true", default=False
+        "-f",
+        "--filename",
+        help="Input CSV file containing sketch data",
+        default="casting.csv",
     )
-    parser.add_argument("-s", "--column_sep", nargs="?", default=",")
-    parser.add_argument("-c", "--cast_sep", nargs="?", default=" ")
+    parser.add_argument(
+        "-o",
+        "--output_filename",
+        help="Output PDF file for the running order",
+        default="running_order.pdf",
+    )
+    parser.add_argument(
+        "-d",
+        "--dont_try_to_keep_order",
+        action="store_true",
+        help="Ignore original order when optimizing",
+        default=False,
+    )
+    parser.add_argument(
+        "-s", "--column_sep", help="Separator character for CSV columns", default=","
+    )
+    parser.add_argument(
+        "-c", "--cast_sep", help="Separator character for cast lists", default=" "
+    )
     args = parser.parse_args(cli_args)
     if args.column_sep == args.cast_sep:
         raise ValueError(
@@ -101,31 +121,50 @@ def parse_args(cli_args: list[str]) -> Namespace:
     return args
 
 
-def parse_csv(
-    text: str, sep: str = ",", cast_sep: str = " ", header: bool = True
-) -> list[Sketch]:
-    """Parse the text of a csv file to generate a list of sketches.
+def read_and_validate_csv(filename: str, sep: str) -> list[str]:
+    """Read and validate the CSV file format.
 
     Args:
-        text:
-            Text about sketches. Expected to have three columns: title, cast,
-            and anchored.
-        sep:
-            Separator between the columns.
-        cast_sep:
-            Separator between the cast members in the cast column.
-        header:
-            Whether the text contains a header line.
+        filename: Path to the input file
+        sep: Separator between the columns
+
+    Returns:
+        The lines of the validated file
+
+    Raises:
+        ValueError: If file format is invalid
+        FileNotFoundError: If file doesn't exist
+    """
+    with open(filename, encoding="utf-8") as f:
+        lines = f.readlines()
+    if not lines:
+        raise ValueError("Input file is empty")
+    for line_num, line in enumerate(lines, 1):
+        stripped = line.strip()
+        col_count = stripped.count(sep) + 1
+        if col_count not in (2, 3):
+            raise ValueError(
+                f"Expected 2 or 3 columns at line {line_num}, found {col_count}."
+            )
+    return lines[1:]
+
+
+def parse_csv(
+    lines: list[str], sep: str = ",", cast_sep: str = " ", header: bool = True
+) -> list[Sketch]:
+    """Parse the lines of a csv file to generate a list of sketches.
+
+    Args:
+        lines: Lines from the CSV file, excluding the header
+        sep: Separator between the columns
+        cast_sep: Separator between the cast members
+        header: Whether the text contains a header line
 
     Returns:
         The sketches as a list of populated Sketch entries.
     """
     result = []
-    if header:
-        first_line = 1
-    else:
-        first_line = 0
-    for line in text.splitlines()[first_line:]:
+    for line in lines:
         if not line.strip():
             continue
         try:
@@ -313,17 +352,23 @@ def find_best_order(
             If there is no running order that fits the constraints.
     """
     all_orders = find_all_orders(allowed_nexts, anchors)
+    if not all_orders:
+        raise ValueError("No valid running order found that satisfies all constraints")
+
     if desired is None:
-        best_orders = all_orders
-    else:
-        costs = {
-            candidate: evaluate_cost(candidate, desired) for candidate in all_orders
-        }
-        min_cost = min(costs.values())
-        best_orders = {
-            candidate for candidate, cost in costs.items() if cost == min_cost
-        }
-    return list(best_orders)[0]
+        return next(iter(all_orders))
+
+    return find_closest_to_desired(all_orders, desired)
+
+
+def find_closest_to_desired(
+    orders: set[SketchOrder], desired: list[int]
+) -> SketchOrder:
+    """Find the order closest to the desired order."""
+    costs = {candidate: evaluate_cost(candidate, desired) for candidate in orders}
+    min_cost = min(costs.values())
+    best_orders = {candidate for candidate, cost in costs.items() if cost == min_cost}
+    return next(iter(best_orders))
 
 
 def find_all_orders(
@@ -350,11 +395,16 @@ def find_all_orders(
     empty_order = SketchOrder([])
     stack = [empty_order]
     discovered = {empty_order}
+    progress_interval = max(1, num_sketches // PROGRESS_UPDATE_FREQUENCY)
+    last_progress = len(discovered)
     while stack:
         partial_order = stack.pop()
         candidates = partial_order.possible_next_states(
             allowed_nexts, num_sketches, anchors
         )
+        if len(discovered) - last_progress >= progress_interval:
+            print(f"Processed {len(discovered)} partial orders...")
+            last_progress = len(discovered)
         for candidate_one_longer in candidates:
             if len(candidate_one_longer.order) == num_sketches:
                 allowed_full_orders.add(candidate_one_longer)
@@ -387,6 +437,29 @@ def evaluate_cost(candidate: SketchOrder, desired: list[int]) -> int:
         abs(actual - desired)
         for actual, desired in zip(actual_spot.keys(), desired_spot.keys())
     )
+
+
+def write_running_order_to_pdf(sketches, filename, config: PdfConfig = PdfConfig()):
+    """Write the running order to a formatted PDF file.
+
+    Args:
+        sketches: List of sketches to include in the running order
+        filename: Name of the output PDF file
+        config: PDF formatting configuration settings
+    """
+    pdf = FPDF()
+    pdf.set_auto_page_break(auto=True, margin=15)
+    pdf.add_page()
+    for i, sketch in enumerate(sketches, start=1):
+        pdf.set_font(config.font, style="B", size=config.title_font_size)
+        pdf.cell(
+            0, config.title_cell_height, f"{i}. {sketch.title}", ln=True, align="C"
+        )
+        pdf.set_font(config.font, size=config.cast_font_size)
+        cast_text = ", ".join(sorted(sketch.cast))
+        pdf.cell(0, config.cast_cell_height, cast_text, ln=True, align="C")
+        pdf.ln(config.space_between_sketches)
+    pdf.output(filename)
 
 
 if __name__ == "__main__":
