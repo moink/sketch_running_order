@@ -9,12 +9,25 @@ from typing import Iterable, Self
 
 from fpdf import FPDF
 
-OUTPUT_PDF_FONT = "Helvetica"
-OUTPUT_PDF_TITLE_FONT_SIZE = 18
-OUTPUT_PDF_CAST_FONT_SIZE = 12
-OUTPUT_PDF_TITLE_CELL_HEIGHT = 10
-OUTPUT_PDF_CAST_CELL_HEIGHT = 8
-OUTPUT_PDF_SPACE_BETWEEN_SKETCHES = 10
+
+@dataclass
+class PdfConfig:
+    """Configuration settings for PDF output formatting.
+
+    Attributes:
+        font: Font family to use in the PDF
+        title_font_size: Font size for sketch titles
+        cast_font_size: Font size for cast lists
+        title_cell_height: Height of cells containing titles
+        cast_cell_height: Height of cells containing cast lists
+        space_between_sketches: Vertical space between sketch entries
+    """
+    font: str = "Helvetica"
+    title_font_size: int = 18
+    cast_font_size: int = 12
+    title_cell_height: int = 10
+    cast_cell_height: int = 8
+    space_between_sketches: int = 10
 
 
 @dataclass
@@ -45,20 +58,26 @@ def main(cli_args):
     write_running_order_to_pdf(order, args.output_filename)
 
 
-def write_running_order_to_pdf(sketches, filename):
-    """Write the running order to a formatted PDF file."""
+def write_running_order_to_pdf(sketches, filename, config: PdfConfig = PdfConfig()):
+    """Write the running order to a formatted PDF file.
+
+    Args:
+        sketches: List of sketches to include in the running order
+        filename: Name of the output PDF file
+        config: PDF formatting configuration settings
+    """
     pdf = FPDF()
     pdf.set_auto_page_break(auto=True, margin=15)
     pdf.add_page()
     for i, sketch in enumerate(sketches, start=1):
-        pdf.set_font(OUTPUT_PDF_FONT, style="B", size=OUTPUT_PDF_TITLE_FONT_SIZE)
+        pdf.set_font(config.font, style="B", size=config.title_font_size)
         pdf.cell(
-            0, OUTPUT_PDF_TITLE_CELL_HEIGHT, f"{i}. {sketch.title}", ln=True, align="C"
+            0, config.title_cell_height, f"{i}. {sketch.title}", ln=True, align="C"
         )
-        pdf.set_font(OUTPUT_PDF_FONT, size=OUTPUT_PDF_CAST_FONT_SIZE)
+        pdf.set_font(config.font, size=config.cast_font_size)
         cast_text = ", ".join(sorted(sketch.cast))
-        pdf.cell(0, OUTPUT_PDF_CAST_CELL_HEIGHT, cast_text, ln=True, align="C")
-        pdf.ln(OUTPUT_PDF_SPACE_BETWEEN_SKETCHES)
+        pdf.cell(0, config.cast_cell_height, cast_text, ln=True, align="C")
+        pdf.ln(config.space_between_sketches)
     pdf.output(filename)
 
 
