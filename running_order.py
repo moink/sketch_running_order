@@ -313,3 +313,67 @@ def evaluate_cost(candidate: SketchOrder, desired: list[int]) -> int:
         abs(actual - desired)
         for actual, desired in zip(actual_spot.keys(), desired_spot.keys())
     )
+
+
+# %% Greedy algorithm
+def make_player_indicence_matrix(sketches: Iterable[Sketch]):
+    all_players = list(
+        set(itertools.chain.from_iterable({x.cast for x in sketches})))
+    
+    return [[int(x in y.cast) for y in sketches] for x in all_players]
+
+
+def make_sketch_overlap_matrix(sketches):
+    mat = np.array(make_player_indicence_matrix(sketches))
+    return mat.T @ mat
+
+
+def calc_order_overlap(overlap_mat, candidate: SketchOrder):
+    return sum([overlap_mat[i, j] for i, j in itertools.pairwise(candidate.order)])
+
+
+def find_best_swap(overlap_mat, sketch_order: SketchOrder,
+                   desired: SketchOrder = None):
+    # Find swap that minimises cast overlap. If there are ties, choose the swap
+    # that keeps order closest to desired
+    # TODO include anchors
+    best_overlap = calc_order_overlap(overlap_mat, sketch_order)
+    best_order = sketch_order
+    best_cost = 10000000
+    for i in range(len(sketch_order.order) - 1):
+        for j in range(i+1, len(sketch_order.order)):
+            # Ugh this is very ugly, clean up
+            new_order = SketchOrder(sketch_order.order)  # copy
+            new_order.order[i], new_order.order[j] = \
+                new_order.order[j], new_order.order[i]
+            new_overlap = calc_order_overlap(overlap_mat, new_order)
+            new_cost = best_cost if desired is None else \
+                evaluate_cost(desired, new_order.order)
+            if (new_overlap < best_overlap) or (
+                    (new_overlap == best_overlap) and (new_cost < best_cost)):
+                best_overlap = new_overlap
+                best_order = new_order
+                best_cost = new_cost
+    return best_order, best_overlap, best_cost
+                   
+
+def greedy_algo(overlap_mat, candidate: SketchOrder,
+                desired: SketchOrder = None):
+    # TODO add some level of annealing/decreasing randomness
+    # TODO Repeated logic here and in find_best_swap, could maybe extract common code
+    best_overlap = calc_order_overlap(overlap_mat, candidate)
+    best_order = candidate
+    best_cost = 10000000
+    while True:  # Ugh
+        print('Current best overlap', best_overlap)
+        new_order, new_overlap, new_cost = find_best_swap(
+            overlap_mat, best_order, desired)
+        if (new_overlap < best_overlap) or (
+                (new_overlap == best_overlap) and (new_cost < best_cost)):
+            best_overlap = new_overlap
+            best_order = new_order
+            best_cost = new_cost
+        else:
+            return best_order
+
+        
