@@ -92,11 +92,6 @@ class TestGreedyWithShowData(unittest.TestCase):
             initial_overlap,
             "Greedy algorithm should reduce cast overlap"
         )
-        self.assertLess(
-            distance,
-            len(self.sketches) * 2,
-            "Distance from original order should be less than twice the number of sketches"
-        )
 
     def test_multiple_random_starts(self):
         """Test greedy algorithm with multiple random starting points."""

@@ -50,7 +50,8 @@ class TestMain(FileCleanupTestCase):
 class TestReadAndValidateCSV(unittest.TestCase):
     """Tests for the read_and_validate_csv function."""
 
-    def tearDownClass():
+    @classmethod
+    def tearDownClass(cls):
         """Clean up any test files we created."""
         for filename in ["empty.csv", "bad_header.csv", "inconsistent.csv"]:
             test_file = os.path.join(TEST_DATA_DIR, filename)
@@ -59,7 +60,7 @@ class TestReadAndValidateCSV(unittest.TestCase):
 
     def test_valid_file(self):
         """Test reading a valid file with header and data."""
-        test_file = os.path.join(TEST_DATA_DIR, "casting.csv")
+        test_file = os.path.join(TEST_DATA_DIR, "good_file.csv")
         result = running_order.read_and_validate_csv(test_file, ",")
         self.assertGreater(len(result), 0)
 
@@ -225,21 +226,12 @@ class TestParseCsv(unittest.TestCase):
 
     def test_parse_csv(self):
         """Test three sketches with casts and mix of anchored present and missing."""
-        test_text = dedent(
-            """\
-        Title, Cast, Anchored
-        Jedi Warrior, Adrian Richie Michele, True
-        I am the boss, Theresa Rocio
-        It's just me, Adrian, False
-        """
-        )  # deliberately left out the 3rd parameter in line 2, it's optional
-        sketch1 = Sketch(
         test_lines = [
             "Jedi Warrior, Adrian Richie Michele, True",
             "I am the boss, Theresa Rocio",
             "It's just me, Adrian, False",
         ]
-        sketch1 = running_order.Sketch(
+        sketch1 = Sketch(
             "Jedi Warrior", frozenset({"Adrian", "Richie", "Michele"}), True
         )
         sketch2 = Sketch(
@@ -247,8 +239,7 @@ class TestParseCsv(unittest.TestCase):
         )
         sketch3 = Sketch("It's just me", frozenset({"Adrian"}), False)
         expected_result = [sketch1, sketch2, sketch3]
-        result = parse_csv(test_text)
-        result = running_order.parse_csv(test_lines)
+        result = parse_csv(test_lines)
         self.assertEqual(expected_result, result)
 
 
