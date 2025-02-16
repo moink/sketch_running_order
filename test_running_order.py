@@ -1,18 +1,30 @@
-"""Tests for the running_order.py module."""
+"""Tests for the py module."""
 
 import os.path
 import re
 import unittest
 from argparse import Namespace
-from textwrap import dedent
 
-from running_order import (get_anchors, find_best_order, get_allowable_next_sketches, \
-    optimize_running_order, evaluate_cost, parse_csv, Sketch, SketchOrder, \
-    find_all_orders, make_sketch_overlap_matrix, greedy_algo)
 from pdf2image import convert_from_path
 from PIL import ImageChops
 
-import running_order
+from running_order import (
+    get_anchors,
+    find_best_order,
+    get_allowable_next_sketches,
+    optimize_running_order,
+    evaluate_cost,
+    parse_csv,
+    Sketch,
+    SketchOrder,
+    find_all_orders,
+    make_sketch_overlap_matrix,
+    greedy_algo,
+    main,
+    parse_args,
+    read_and_validate_csv,
+    write_running_order_to_pdf,
+)
 
 TEST_DATA_DIR = os.path.join(os.path.dirname(__file__), "test_data")
 
@@ -43,7 +55,7 @@ class TestMain(FileCleanupTestCase):
         """Test the main function using test data from CSV file."""
         test_input = os.path.join(TEST_DATA_DIR, "main_test_input.csv")
         expected_output = os.path.join(TEST_DATA_DIR, "expected_main_output.pdf")
-        running_order.main(["-f", test_input, "-o", self.output_filename])
+        main(["-f", test_input, "-o", self.output_filename])
         self.assertTrue(pdfs_look_same(expected_output, self.output_filename))
 
 
@@ -61,17 +73,17 @@ class TestReadAndValidateCSV(unittest.TestCase):
     def test_valid_file(self):
         """Test reading a valid file with header and data."""
         test_file = os.path.join(TEST_DATA_DIR, "good_file.csv")
-        result = running_order.read_and_validate_csv(test_file, ",")
+        result = read_and_validate_csv(test_file, ",")
         self.assertGreater(len(result), 0)
 
     def test_empty_file(self):
         """Test that an empty file raises an error."""
         test_file = os.path.join(TEST_DATA_DIR, "empty.csv")
-        with open(test_file, "w", encoding="utf-8") as f:
+        with open(test_file, "w", encoding="utf-8") as _:
             pass
         expected_msg = "Input file is empty"
         with self.assertRaisesRegex(ValueError, expected_msg):
-            running_order.read_and_validate_csv(test_file, ",")
+            read_and_validate_csv(test_file, ",")
 
     def test_wrong_column_count_header(self):
         """Test that wrong number of columns in header raises error."""
@@ -81,7 +93,7 @@ class TestReadAndValidateCSV(unittest.TestCase):
             f.write("Sketch 1, Cast 1, True\n")
         expected_msg = re.escape("Expected 2 or 3 columns at line 1, found 1.")
         with self.assertRaisesRegex(ValueError, expected_msg):
-            running_order.read_and_validate_csv(test_file, ",")
+            read_and_validate_csv(test_file, ",")
 
     def test_inconsistent_columns(self):
         """Test that inconsistent column counts raise error."""
@@ -92,13 +104,13 @@ class TestReadAndValidateCSV(unittest.TestCase):
             f.write("Sketch 2, Cast 2, True, Extra\n")
         expected_msg = re.escape("Expected 2 or 3 columns at line 3, found 4.")
         with self.assertRaisesRegex(ValueError, expected_msg):
-            running_order.read_and_validate_csv(test_file, ",")
+            read_and_validate_csv(test_file, ",")
 
     def test_missing_file(self):
         """Test that a missing file raises FileNotFoundError."""
         test_file = os.path.join(TEST_DATA_DIR, "nonexistent.csv")
         with self.assertRaises(FileNotFoundError):
-            running_order.read_and_validate_csv(test_file, ",")
+            read_and_validate_csv(test_file, ",")
 
 
 class TestWriteRunningOrderToPDF(FileCleanupTestCase):
@@ -106,18 +118,16 @@ class TestWriteRunningOrderToPDF(FileCleanupTestCase):
 
     def test_write_running_order_to_pdf(self):
         """Test a simple version with three sketches."""
-        sketch1 = running_order.Sketch(
+        sketch1 = Sketch(
             "Jedi Warrior", frozenset({"Adrian", "Richie", "Michele"}), True
         )
-        sketch2 = running_order.Sketch(
-            "I am the boss", frozenset({"Theresa", "Rocio"}), False
-        )
-        sketch3 = running_order.Sketch("It's just me", frozenset({"Adrian"}), False)
+        sketch2 = Sketch("I am the boss", frozenset({"Theresa", "Rocio"}), False)
+        sketch3 = Sketch("It's just me", frozenset({"Adrian"}), False)
         order = [sketch1, sketch2, sketch3]
         expected_filename = os.path.join(
             TEST_DATA_DIR, "expected_output_test_output.pdf"
         )
-        running_order.write_running_order_to_pdf(order, self.output_filename)
+        write_running_order_to_pdf(order, self.output_filename)
         self.assertTrue(pdfs_look_same(expected_filename, self.output_filename))
 
 
@@ -147,7 +157,7 @@ class TestParseCommandLineArgs(unittest.TestCase):
             column_sep=",",
             cast_sep=" ",
         )
-        result = running_order.parse_args([])
+        result = parse_args([])
         self.assertEqual(expected_result, result)
 
     def test_parse_filename(self):
@@ -159,7 +169,7 @@ class TestParseCommandLineArgs(unittest.TestCase):
             column_sep=",",
             cast_sep=" ",
         )
-        result = running_order.parse_args(["-f", "poop.csv"])
+        result = parse_args(["-f", "poop.csv"])
         self.assertEqual(expected_result, result)
 
     def test_parse_dont_try_to_keep_order(self):
@@ -171,7 +181,7 @@ class TestParseCommandLineArgs(unittest.TestCase):
             column_sep=",",
             cast_sep=" ",
         )
-        result = running_order.parse_args(["-d"])
+        result = parse_args(["-d"])
         self.assertEqual(expected_result, result)
 
     def test_parse_column_sep(self):
@@ -183,7 +193,7 @@ class TestParseCommandLineArgs(unittest.TestCase):
             column_sep=";",
             cast_sep=" ",
         )
-        result = running_order.parse_args(["--column_sep", ";"])
+        result = parse_args(["--column_sep", ";"])
         self.assertEqual(expected_result, result)
 
     def test_parse_cast_sep(self):
@@ -195,7 +205,7 @@ class TestParseCommandLineArgs(unittest.TestCase):
             column_sep=",",
             cast_sep=";",
         )
-        result = running_order.parse_args(["-c", ";"])
+        result = parse_args(["-c", ";"])
         self.assertEqual(expected_result, result)
 
     def test_parse_all(self):
@@ -207,7 +217,7 @@ class TestParseCommandLineArgs(unittest.TestCase):
             column_sep=";",
             cast_sep=",",
         )
-        result = running_order.parse_args(
+        result = parse_args(
             ["-f", "poop.csv", "-o", "you're an eight.pdf", "-d", "-s", ";", "-c", ","]
         )
         self.assertEqual(expected_result, result)
@@ -218,7 +228,7 @@ class TestParseCommandLineArgs(unittest.TestCase):
             "Column separator and cast separator cannot be the same character."
         )
         with self.assertRaisesRegex(ValueError, expected_msg):
-            running_order.parse_args(["-c", ","])
+            parse_args(["-c", ","])
 
 
 class TestParseCsv(unittest.TestCase):
@@ -234,9 +244,7 @@ class TestParseCsv(unittest.TestCase):
         sketch1 = Sketch(
             "Jedi Warrior", frozenset({"Adrian", "Richie", "Michele"}), True
         )
-        sketch2 = Sketch(
-            "I am the boss", frozenset({"Theresa", "Rocio"}), False
-        )
+        sketch2 = Sketch("I am the boss", frozenset({"Theresa", "Rocio"}), False)
         sketch3 = Sketch("It's just me", frozenset({"Adrian"}), False)
         expected_result = [sketch1, sketch2, sketch3]
         result = parse_csv(test_lines)
@@ -257,9 +265,7 @@ class TestOptimizeRunningOrder(unittest.TestCase):
 
     def test_with_anchor(self):
         """Use both casting constraints and an anchored sketch."""
-        sketch1 = Sketch(
-            "Jedi Warrior", {"Adrian", "Richie", "Michele"}, anchored=True
-        )
+        sketch1 = Sketch("Jedi Warrior", {"Adrian", "Richie", "Michele"}, anchored=True)
         sketch2 = Sketch("I am the boss", {"Theresa", "Rocio"})
         sketch3 = Sketch("It's just me", {"Adrian"})
         result = optimize_running_order([sketch1, sketch2, sketch3])
@@ -512,7 +518,7 @@ class TestGreedyAlgorithm(unittest.TestCase):
             Sketch("Sketch 1", frozenset({"Actor1", "Actor2"})),
             Sketch("Sketch 2", frozenset({"Actor2", "Actor3"})),
             Sketch("Sketch 3", frozenset({"Actor3", "Actor4"})),
-            Sketch("Sketch 4", frozenset({"Actor1", "Actor4"}))
+            Sketch("Sketch 4", frozenset({"Actor1", "Actor4"})),
         ]
         self.overlap_matrix = make_sketch_overlap_matrix(self.sketches)
 
@@ -534,7 +540,7 @@ class TestGreedyAlgorithm(unittest.TestCase):
         self.assertLess(
             final_overlap,
             initial_overlap,
-            "Greedy algorithm should reduce cast overlap"
+            "Greedy algorithm should reduce cast overlap",
         )
 
     def test_greedy_algo_with_desired_order(self):
@@ -549,12 +555,10 @@ class TestGreedyAlgorithm(unittest.TestCase):
 
         # Both should have same overlap
         overlap1 = sum(
-            self.overlap_matrix[i, j]
-            for i, j in zip(result1.order, result1.order[1:])
+            self.overlap_matrix[i, j] for i, j in zip(result1.order, result1.order[1:])
         )
         overlap2 = sum(
-            self.overlap_matrix[i, j]
-            for i, j in zip(result2.order, result2.order[1:])
+            self.overlap_matrix[i, j] for i, j in zip(result2.order, result2.order[1:])
         )
         self.assertEqual(overlap1, overlap2)
 
@@ -564,7 +568,7 @@ class TestGreedyAlgorithm(unittest.TestCase):
         self.assertLessEqual(
             dist2,
             dist1,
-            "Solution with desired order should be no further from desired order"
+            "Solution with desired order should be no further from desired order",
         )
 
     def test_overlap_matrix_correctness(self):
@@ -594,13 +598,12 @@ class TestGreedyAlgorithm(unittest.TestCase):
             for i, j in zip(optimal_order.order, optimal_order.order[1:])
         )
         final_overlap = sum(
-            self.overlap_matrix[i, j]
-            for i, j in zip(result.order, result.order[1:])
+            self.overlap_matrix[i, j] for i, j in zip(result.order, result.order[1:])
         )
         self.assertEqual(
             final_overlap,
             initial_overlap,
-            "Greedy algorithm should not worsen an optimal solution"
+            "Greedy algorithm should not worsen an optimal solution",
         )
 
 

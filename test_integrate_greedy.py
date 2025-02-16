@@ -10,7 +10,7 @@ from running_order import (
     SketchOrder,
     make_sketch_overlap_matrix,
     greedy_algo,
-    evaluate_cost
+    evaluate_cost,
 )
 
 
@@ -21,10 +21,7 @@ class TestGreedyWithShowData(unittest.TestCase):
     def setUpClass(cls):
         """Load the show data from spreadsheet."""
         sketch_casting = pd.read_csv(
-            os.path.join(os.path.dirname(__file__),
-                "test_data",
-                "casting.csv"
-            )
+            os.path.join(os.path.dirname(__file__), "test_data", "casting.csv")
         )
         sketch_casting.set_index("title", inplace=True)
         cls.sketches = []
@@ -40,8 +37,7 @@ class TestGreedyWithShowData(unittest.TestCase):
         """Test greedy algorithm without using original order."""
         start_time = time.time()
         candidate = greedy_algo(
-            self.overlap_matrix,
-            SketchOrder(range(len(self.sketches)))
+            self.overlap_matrix, SketchOrder(range(len(self.sketches)))
         )
         initial_overlap = sum(
             self.overlap_matrix[i, j]
@@ -61,7 +57,7 @@ class TestGreedyWithShowData(unittest.TestCase):
         self.assertLess(
             final_overlap,
             initial_overlap,
-            "Greedy algorithm should reduce cast overlap"
+            "Greedy algorithm should reduce cast overlap",
         )
 
     def test_greedy_with_original_order(self):
@@ -70,7 +66,7 @@ class TestGreedyWithShowData(unittest.TestCase):
         candidate = greedy_algo(
             self.overlap_matrix,
             SketchOrder(range(len(self.sketches))),
-            range(len(self.sketches))
+            range(len(self.sketches)),
         )
         initial_overlap = sum(
             self.overlap_matrix[i, j]
@@ -90,14 +86,14 @@ class TestGreedyWithShowData(unittest.TestCase):
         self.assertLess(
             final_overlap,
             initial_overlap,
-            "Greedy algorithm should reduce cast overlap"
+            "Greedy algorithm should reduce cast overlap",
         )
 
     def test_multiple_random_starts(self):
         """Test greedy algorithm with multiple random starting points."""
         start_time = time.time()
-        best_distance = float('inf')
-        best_overlap = float('inf')
+        best_distance = float("inf")
+        best_overlap = float("inf")
         print("Multiple random starts:")
         for i in range(20):
             iter_start = time.time()
@@ -105,7 +101,7 @@ class TestGreedyWithShowData(unittest.TestCase):
             candidate = greedy_algo(
                 self.overlap_matrix,
                 SketchOrder(random_start),
-                range(len(self.sketches))
+                range(len(self.sketches)),
             )
             current_overlap = sum(
                 self.overlap_matrix[i, j]
@@ -116,24 +112,22 @@ class TestGreedyWithShowData(unittest.TestCase):
             best_distance = min(best_distance, current_distance)
             best_overlap = min(best_overlap, current_overlap)
 
-            print(f'Run {i + 1:2d} - Overlap: {current_overlap:2d}, '
-                  f'Distance: {current_distance:2d}, '
-                  f'Time: {iter_time:.2f}s')
-            self.assertGreaterEqual(
-                current_overlap,
-                0,
-                "Cast overlap cannot be negative"
+            print(
+                f"Run {i + 1:2d} - Overlap: {current_overlap:2d}, "
+                f"Distance: {current_distance:2d}, "
+                f"Time: {iter_time:.2f}s"
             )
             self.assertGreaterEqual(
-                current_distance,
-                0,
-                "Distance from original order cannot be negative"
+                current_overlap, 0, "Cast overlap cannot be negative"
+            )
+            self.assertGreaterEqual(
+                current_distance, 0, "Distance from original order cannot be negative"
             )
         total_time = time.time() - start_time
-        print(f'Best overlap achieved: {best_overlap}')
-        print(f'Best distance achieved: {best_distance}')
-        print(f'Total time: {total_time:.2f}s')
-        print(f'Average time per run: {total_time / 20:.2f}s')
+        print(f"Best overlap achieved: {best_overlap}")
+        print(f"Best distance achieved: {best_distance}")
+        print(f"Total time: {total_time:.2f}s")
+        print(f"Average time per run: {total_time / 20:.2f}s")
 
 
 if __name__ == "__main__":

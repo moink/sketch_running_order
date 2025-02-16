@@ -150,16 +150,13 @@ def read_and_validate_csv(filename: str, sep: str) -> list[str]:
     return lines[1:]
 
 
-def parse_csv(
-    lines: list[str], sep: str = ",", cast_sep: str = " ", header: bool = True
-) -> list[Sketch]:
+def parse_csv(lines: list[str], sep: str = ",", cast_sep: str = " ") -> list[Sketch]:
     """Parse the lines of a csv file to generate a list of sketches.
 
     Args:
         lines: Lines from the CSV file, excluding the header
         sep: Separator between the columns
         cast_sep: Separator between the cast members
-        header: Whether the text contains a header line
 
     Returns:
         The sketches as a list of populated Sketch entries.
@@ -512,9 +509,7 @@ def calc_order_overlap(overlap_mat: np.ndarray, candidate: SketchOrder) -> int:
 
 
 def find_best_swap(
-    overlap_mat: np.ndarray,
-    sketch_order: SketchOrder,
-    desired: list[int]
+    overlap_mat: np.ndarray, sketch_order: SketchOrder, desired: list[int]
 ) -> tuple[SketchOrder, int, int]:
     """Find the best swap of two sketches that minimizes cast overlap.
 
