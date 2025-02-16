@@ -4,6 +4,7 @@ import itertools
 from collections import defaultdict
 from dataclasses import dataclass
 from typing import Iterable, Self
+import numpy as np
 
 
 @dataclass
