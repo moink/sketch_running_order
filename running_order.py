@@ -3,14 +3,13 @@
 import itertools
 import sys
 from argparse import ArgumentParser, Namespace, ArgumentDefaultsHelpFormatter
-from collections import defaultdict
 from dataclasses import dataclass
 from typing import Iterable, Self
 import numpy as np
 
 from fpdf import FPDF
 
-PROGRESS_UPDATE_FREQUENCY = 10
+PROGRESS_UPDATE_FREQUENCY = 100
 
 
 @dataclass
@@ -201,7 +200,7 @@ def optimize_running_order(
     else:
         desired = None
     solution = find_best_order(allowed_next, anchors, desired)
-    return [sketches[place] for place in solution.order]
+    return solution.order
 
 
 def get_allowable_next_sketches(sketches: Iterable[Sketch]) -> dict[int, set[int]]:
@@ -217,12 +216,12 @@ def get_allowable_next_sketches(sketches: Iterable[Sketch]) -> dict[int, set[int
             that are permitted to be immediately after that sketch according the casting
             constraints.
     """
-    result = defaultdict(set)
-    for (ind1, sketch1), (ind2, sketch2) in itertools.product(
-        enumerate(sketches), repeat=2
-    ):
-        if not sketch1.cast.intersection(sketch2.cast):
-            result[ind1].add(ind2)
+    result = {}
+    for ind1, sketch1 in enumerate(sketches):
+        result[ind1] = set()
+        for ind2, sketch2 in enumerate(sketches):
+            if not sketch1.cast.intersection(sketch2.cast):
+                result[ind1].add(ind2)
     return dict(result)
 
 
@@ -393,15 +392,14 @@ def find_all_orders(
     empty_order = SketchOrder([])
     stack = [empty_order]
     discovered = {empty_order}
-    progress_interval = max(1, num_sketches // PROGRESS_UPDATE_FREQUENCY)
     last_progress = len(discovered)
     while stack:
         partial_order = stack.pop()
         candidates = partial_order.possible_next_states(
             allowed_nexts, num_sketches, anchors
         )
-        if len(discovered) - last_progress >= progress_interval:
-            print(f"Processed {len(discovered)} partial orders...")
+        if len(discovered) - last_progress >= PROGRESS_UPDATE_FREQUENCY:
+            # print(f"Processed {len(discovered)} partial orders...")
             last_progress = len(discovered)
         for candidate_one_longer in candidates:
             if len(candidate_one_longer.order) == num_sketches:
@@ -549,6 +547,21 @@ def find_best_swap(
     return best_order, best_overlap, best_cost
 
 
+def optimize_running_order_greedy(sketches: list[Sketch]) -> list[int]:
+    """Optimize running order using greedy algorithm.
+
+    Args:
+        sketches: List of sketches to optimize
+
+    Returns:
+        List of indices representing optimal order
+    """
+    overlap_matrix = make_sketch_overlap_matrix(sketches)
+    initial_order = SketchOrder(range(len(sketches)))
+    result = greedy_algo(overlap_matrix, initial_order)
+    return list(result.order)
+
+
 def greedy_algo(
     overlap_mat: np.ndarray, candidate: SketchOrder, desired: SketchOrder | None = None
 ) -> SketchOrder:
@@ -570,7 +583,7 @@ def greedy_algo(
     best_order = candidate
     best_cost = float("inf")  # Changed from 10000000
     while True:
-        print(f"Current best overlap: {best_overlap}")
+        # print(f"Current best overlap: {best_overlap}")
         new_order, new_overlap, new_cost = find_best_swap(
             overlap_mat, best_order, desired
         )
