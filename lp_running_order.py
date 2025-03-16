@@ -6,11 +6,11 @@ from running_order import Sketch, get_anchors
 MAX_SOLVER_TIME_SECONDS = 60
 
 
-def optimize_running_order(sketches: list[Sketch]):
+def optimize_running_order(sketches: list[Sketch], precedence_constraints):
     """Optimize the running order using linear programming."""
     overlap_matrix = get_overlap_matrix(sketches)
     anchors = get_anchors(sketches)
-    solution = solve_sketch_order(overlap_matrix, anchors)
+    solution = solve_sketch_order(overlap_matrix, anchors, precedence_constraints)
     return solution
 
 
@@ -83,4 +83,4 @@ def solve_model(model, order, n):
     if status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
         final_order = sorted(range(n), key=lambda i: solver.Value(order[i]))
         return final_order
-    return "No feasible solution found within time limit."
+    raise ValueError("No feasible solution found within time limit.")
