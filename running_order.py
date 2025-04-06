@@ -141,6 +141,17 @@ def make_sketch_overlap_matrix(sketches: Iterable[Sketch]) -> np.ndarray:
     mat = np.array(make_player_incidence_matrix(sketches))
     return mat.T @ mat
 
+def calc_order_overlap(overlap_mat: np.ndarray, candidate: SketchOrder) -> int:
+    """Calculate total cast overlap between adjacent sketches in an order.
+
+    Args:
+        overlap_mat: Matrix of cast overlaps between sketches
+        candidate: A potential running order to evaluate
+
+    Returns:
+        Sum of cast overlaps between consecutive sketches in the order
+    """
+    return sum(overlap_mat[i, j] for i, j in itertools.pairwise(candidate.order))
 
 def get_anchors(sketches: Iterable[Sketch]) -> dict[int, int]:
     """Get sketches that must remain in their current positions.

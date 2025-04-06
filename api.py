@@ -15,6 +15,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 @app.post("/optimize")
 async def optimize_running_order(request: Request) -> JSONResponse:
     """Optimize the running order of sketches."""

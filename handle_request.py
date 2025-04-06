@@ -1,7 +1,8 @@
-import requests
-
+import json
 from dataclasses import dataclass
 from typing import Any, TypeAlias
+
+from fastapi import Request, HTTPException
 
 import lp_running_order
 from running_order import Sketch, make_sketch_overlap_matrix, calc_order_overlap, \
@@ -28,42 +29,39 @@ class RunningOrderRequest:
     id_to_index: dict[str, int]  # for converting back to JSON response
 
 
-def handle_running_order_request(request: requests.Request) -> JsonDict:
-    """Handle running order optimization request.
+async def handle_running_order_request(request: Request) -> JsonDict:
+    """Handle running order optimization request."""
 
-    Args:
-        request: HTTP request containing JSON data
-
-    Returns:
-        JSON response with optimization result
-    """
+    # Parse JSON from incoming request
     try:
-        request_data = request.json()
-    except requests.exceptions.JSONDecodeError as e:
-        return create_error_response(f"Invalid JSON in request: {str(e)}")
+        request_data = await request.json()
+    except json.JSONDecodeError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid JSON in request: {str(e)}")
+
+    # Validate + convert input
     try:
         converted = convert_request_to_sketches(request_data)
     except (KeyError, ValueError) as e:
-        return create_error_response(f"Invalid request format: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"Invalid request format: {str(e)}")
+
+    # Run optimization
     try:
         optimal_order = lp_running_order.optimize_running_order(
             converted.sketches,
             converted.precedence
         )
+        success = True
     except ValueError as e:
-        # Optimization failed but request was valid
+        # Optimization failed but input was valid
         optimal_order = list(range(len(converted.sketches)))
-        return convert_result_to_json(
-            converted.sketches,
-            optimal_order,
-            converted.id_to_index,
-            success=False
-        )
+        success = False
+
+    # Return output
     return convert_result_to_json(
         converted.sketches,
         optimal_order,
         converted.id_to_index,
-        success=True
+        success=success
     )
 
 
