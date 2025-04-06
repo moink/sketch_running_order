@@ -1,4 +1,5 @@
 """Find sketch running order using linear programming."""
+
 from ortools.sat.python import cp_model
 
 from running_order import Sketch, get_anchors

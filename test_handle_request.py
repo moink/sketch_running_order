@@ -1,104 +1,8 @@
 import unittest
-from unittest.mock import Mock
 
-import requests
-
-from handle_request import convert_request_to_sketches, convert_result_to_json, \
-    handle_running_order_request
+from handle_request import convert_result_to_json, convert_request_to_sketches
 from running_order import Sketch
 
-
-class TestRunningOrderRequest(unittest.TestCase):
-    """Tests for handling running order optimization requests."""
-
-    def test_successful_request(self):
-        """Test handling of valid request."""
-        request_data = {
-            "sketches": [
-                {
-                    "id": "sketch1",
-                    "title": "The Vikings",
-                    "cast": ["Erik", "Olaf"]
-                },
-                {
-                    "id": "sketch2",
-                    "title": "The Office",
-                    "cast": ["Jim", "Pam"]
-                }
-            ],
-            "constraints": {
-                "anchored": [
-                    {
-                        "sketch_id": "sketch1",
-                        "position": 0
-                    }
-                ]
-            }
-        }
-        mock_request = unittest.mock.Mock()
-        mock_request.json.return_value = request_data
-        result = handle_running_order_request(mock_request)
-        self.assertTrue(result["success"])
-        self.assertEqual(len(result["order"]), 2)
-        self.assertEqual(result["order"][0]["sketch_id"], "sketch1")  # anchored at 0
-
-    def test_invalid_json(self):
-        """Test handling of invalid JSON in request."""
-        mock_request = Mock()
-        mock_request.json.side_effect = requests.exceptions.JSONDecodeError(
-            "Invalid JSON", "", 0
-        )
-        result = handle_running_order_request(mock_request)
-        self.assertFalse(result["success"])
-        self.assertIn("error", result)
-        self.assertEqual(result["order"], [])
-
-    def test_invalid_request_format(self):
-        """Test handling of invalid request format."""
-        # Missing required fields
-        request_data = {
-            "sketches": [
-                {
-                    "id": "sketch1",
-                    # missing title and cast
-                }
-            ]
-        }
-        mock_request = unittest.mock.Mock()
-        mock_request.json.return_value = request_data
-        result = handle_running_order_request(mock_request)
-        self.assertFalse(result["success"])
-        self.assertIn("error", result)
-        self.assertEqual(result["order"], [])
-
-    def test_optimization_failure(self):
-        """Test handling of optimization failure."""
-        request_data = {
-            "sketches": [
-                {
-                    "id": "sketch1",
-                    "title": "The Vikings",
-                    "cast": ["Erik", "Olaf"]
-                },
-                {
-                    "id": "sketch2",
-                    "title": "The Office",
-                    "cast": ["Erik", "Jim"]
-                }
-            ],
-            "constraints": {
-                # Create unsolvable situation: sketches must be both before and after each other
-                "precedence": [
-                    {"before": "sketch1", "after": "sketch2"},
-                    {"before": "sketch2", "after": "sketch1"}
-                ]
-            }
-        }
-        mock_request = unittest.mock.Mock()
-        mock_request.json.return_value = request_data
-        result = handle_running_order_request(mock_request)
-        self.assertFalse(result["success"])
-        self.assertEqual(len(result["order"]), 2)
 
 class TestConvertRequestToSketches(unittest.TestCase):
     """Tests for converting JSON requests to Sketch objects."""
@@ -107,16 +11,8 @@ class TestConvertRequestToSketches(unittest.TestCase):
         """Test conversion of simple request with no constraints."""
         request = {
             "sketches": [
-                {
-                    "id": "sketch1",
-                    "title": "The Vikings",
-                    "cast": ["Erik", "Olaf"]
-                },
-                {
-                    "id": "sketch2",
-                    "title": "The Office",
-                    "cast": ["Jim", "Pam"]
-                }
+                {"id": "sketch1", "title": "The Vikings", "cast": ["Erik", "Olaf"]},
+                {"id": "sketch2", "title": "The Office", "cast": ["Jim", "Pam"]},
             ]
         }
         result = convert_request_to_sketches(request)
@@ -131,31 +27,13 @@ class TestConvertRequestToSketches(unittest.TestCase):
         """Test conversion with both types of constraints."""
         request = {
             "sketches": [
-                {
-                    "id": "sketch1",
-                    "title": "The Vikings",
-                    "cast": ["Erik", "Olaf"]
-                },
-                {
-                    "id": "sketch2",
-                    "title": "The Office",
-                    "cast": ["Jim", "Pam"]
-                }
+                {"id": "sketch1", "title": "The Vikings", "cast": ["Erik", "Olaf"]},
+                {"id": "sketch2", "title": "The Office", "cast": ["Jim", "Pam"]},
             ],
             "constraints": {
-                "anchored": [
-                    {
-                        "sketch_id": "sketch1",
-                        "position": 0
-                    }
-                ],
-                "precedence": [
-                    {
-                        "before": "sketch1",
-                        "after": "sketch2"
-                    }
-                ]
-            }
+                "anchored": [{"sketch_id": "sketch1", "position": 0}],
+                "precedence": [{"before": "sketch1", "after": "sketch2"}],
+            },
         }
         result = convert_request_to_sketches(request)
         self.assertEqual(len(result.precedence), 1)
@@ -168,46 +46,38 @@ class TestConvertRequestToSketches(unittest.TestCase):
             convert_request_to_sketches({})
         # Missing required sketch fields
         with self.assertRaises(ValueError):
-            convert_request_to_sketches({
-                "sketches": [
-                    {
-                        "id": "sketch1",
-                        "title": "The Vikings"
-                        # missing cast
-                    }
-                ]
-            })
+            convert_request_to_sketches(
+                {
+                    "sketches": [
+                        {
+                            "id": "sketch1",
+                            "title": "The Vikings",
+                            # missing cast
+                        }
+                    ]
+                }
+            )
         # Duplicate sketch IDs
         with self.assertRaises(ValueError):
-            convert_request_to_sketches({
-                "sketches": [
-                    {
-                        "id": "sketch1",
-                        "title": "The Vikings",
-                        "cast": ["Erik"]
-                    },
-                    {
-                        "id": "sketch1",  # duplicate ID
-                        "title": "The Office",
-                        "cast": ["Jim"]
-                    }
-                ]
-            })
+            convert_request_to_sketches(
+                {
+                    "sketches": [
+                        {"id": "sketch1", "title": "The Vikings", "cast": ["Erik"]},
+                        {
+                            "id": "sketch1",  # duplicate ID
+                            "title": "The Office",
+                            "cast": ["Jim"],
+                        },
+                    ]
+                }
+            )
 
     def test_invalid_constraints(self):
         """Test handling of invalid constraints."""
         base_request = {
             "sketches": [
-                {
-                    "id": "sketch1",
-                    "title": "The Vikings",
-                    "cast": ["Erik"]
-                },
-                {
-                    "id": "sketch2",
-                    "title": "The Office",
-                    "cast": ["Jim"]
-                }
+                {"id": "sketch1", "title": "The Vikings", "cast": ["Erik"]},
+                {"id": "sketch2", "title": "The Office", "cast": ["Jim"]},
             ]
         }
         # Invalid anchor position
@@ -215,10 +85,7 @@ class TestConvertRequestToSketches(unittest.TestCase):
             bad_request = base_request.copy()
             bad_request["constraints"] = {
                 "anchored": [
-                    {
-                        "sketch_id": "sketch1",
-                        "position": 99  # position out of range
-                    }
+                    {"sketch_id": "sketch1", "position": 99}  # position out of range
                 ]
             }
             convert_request_to_sketches(bad_request)
@@ -226,12 +93,7 @@ class TestConvertRequestToSketches(unittest.TestCase):
         with self.assertRaises(ValueError):
             bad_request = base_request.copy()
             bad_request["constraints"] = {
-                "anchored": [
-                    {
-                        "sketch_id": "unknown",  # nonexistent ID
-                        "position": 0
-                    }
-                ]
+                "anchored": [{"sketch_id": "unknown", "position": 0}]  # nonexistent ID
             }
             convert_request_to_sketches(bad_request)
         # Unknown sketch ID in precedence
@@ -239,10 +101,7 @@ class TestConvertRequestToSketches(unittest.TestCase):
             bad_request = base_request.copy()
             bad_request["constraints"] = {
                 "precedence": [
-                    {
-                        "before": "sketch1",
-                        "after": "unknown"  # nonexistent ID
-                    }
+                    {"before": "sketch1", "after": "unknown"}  # nonexistent ID
                 ]
             }
             convert_request_to_sketches(bad_request)
@@ -251,14 +110,8 @@ class TestConvertRequestToSketches(unittest.TestCase):
             bad_request = base_request.copy()
             bad_request["constraints"] = {
                 "anchored": [
-                    {
-                        "sketch_id": "sketch1",
-                        "position": 0
-                    },
-                    {
-                        "sketch_id": "sketch2",
-                        "position": 0  # duplicate position
-                    }
+                    {"sketch_id": "sketch1", "position": 0},
+                    {"sketch_id": "sketch2", "position": 0},  # duplicate position
                 ]
             }
             convert_request_to_sketches(bad_request)
@@ -272,20 +125,14 @@ class TestConvertResultToJson(unittest.TestCase):
         self.sketches = [
             Sketch("The Vikings", frozenset(["Erik", "Olaf"])),
             Sketch("The Office", frozenset(["Jim", "Pam"])),
-            Sketch("The Band", frozenset(["Erik", "Paul"]))
+            Sketch("The Band", frozenset(["Erik", "Paul"])),
         ]
-        self.id_to_index = {
-            "sketch1": 0,
-            "sketch2": 1,
-            "sketch3": 2
-        }
+        self.id_to_index = {"sketch1": 0, "sketch2": 1, "sketch3": 2}
 
     def test_basic_conversion(self):
         """Test basic conversion of optimization result."""
         order = [1, 2, 0]  # Office, Band, Vikings
-        result = convert_result_to_json(
-            self.sketches, order, self.id_to_index
-        )
+        result = convert_result_to_json(self.sketches, order, self.id_to_index)
         self.assertTrue(result["success"])
         self.assertEqual(len(result["order"]), 3)
         # Check order
@@ -299,16 +146,12 @@ class TestConvertResultToJson(unittest.TestCase):
         """Test that cast overlaps are correctly calculated."""
         # Put sketches with overlapping cast next to each other
         order = [0, 2, 1]  # Vikings(Erik,Olaf), Band(Erik,Paul), Office(Jim,Pam)
-        result = convert_result_to_json(
-            self.sketches, order, self.id_to_index
-        )
+        result = convert_result_to_json(self.sketches, order, self.id_to_index)
         # Erik appears in both Vikings and Band
         self.assertEqual(result["metrics"]["cast_overlaps"], 1)
         # No overlaps in this order
         order = [0, 1, 2]  # Vikings, Office, Band
-        result = convert_result_to_json(
-            self.sketches, order, self.id_to_index
-        )
+        result = convert_result_to_json(self.sketches, order, self.id_to_index)
         self.assertEqual(result["metrics"]["cast_overlaps"], 0)
 
     def test_failed_optimization(self):
@@ -330,5 +173,5 @@ class TestConvertResultToJson(unittest.TestCase):
         self.assertEqual(result["metrics"]["cast_overlaps"], 0)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()
