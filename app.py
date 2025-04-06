@@ -1,7 +1,7 @@
 from flask import Flask, request, jsonify
 
 import lp_running_order
-from handle_request import create_error_response, convert_request_to_sketches
+from handle_request import create_error_response, convert_request_to_sketches, convert_result_to_json
 
 app = Flask(__name__)
 
@@ -20,7 +20,7 @@ def optimize_running_order():
         )
     except Exception as e:
         return create_error_response(repr(e)), 500
-    return jsonify(success=True, order=optimal_order)
+    return jsonify(convert_result_to_json(converted.sketches, optimal_order, converted.id_to_index, True))
 
 
 if __name__ == "__main__":
