@@ -1,12 +1,7 @@
 """Tests for the py module."""
 
 import os.path
-import re
 import unittest
-from argparse import Namespace
-
-from pdf2image import convert_from_path
-from PIL import ImageChops
 
 from running_order import (
     get_anchors,
@@ -16,7 +11,6 @@ from running_order import (
 )
 
 TEST_DATA_DIR = os.path.join(os.path.dirname(__file__), "test_data")
-
 
 
 class TestGetAnchors(unittest.TestCase):
@@ -128,7 +122,6 @@ class TestOverlapMatrix(unittest.TestCase):
         # Check non-overlaps
         self.assertEqual(matrix[0, 2], 0)  # Sketches 1&3 share no actors
         self.assertEqual(matrix[1, 3], 0)  # Sketches 2&4 share no actors
-
 
 
 if __name__ == "__main__":

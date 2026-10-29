@@ -1,16 +1,12 @@
-import json
-from dataclasses import dataclass
-from typing import Any, TypeAlias
+import dataclasses
+from typing import Any
 
-from fastapi import Request, HTTPException
+from pydantic.config import JsonDict
 
-import lp_running_order
-from running_order import Sketch, make_sketch_overlap_matrix, calc_order_overlap, \
-    SketchOrder
+from running_order import Sketch, make_sketch_overlap_matrix
 
-JsonDict: TypeAlias = dict[str, Any]
 
-@dataclass
+@dataclasses.dataclass
 class RunningOrderRequest:
     """Container for sketches and constraints from JSON request.
 
@@ -27,42 +23,6 @@ class RunningOrderRequest:
     sketches: list[Sketch]
     precedence: list[tuple[int, int]]  # list of (before_index, after_index)
     id_to_index: dict[str, int]  # for converting back to JSON response
-
-
-async def handle_running_order_request(request: Request) -> JsonDict:
-    """Handle running order optimization request."""
-
-    # Parse JSON from incoming request
-    try:
-        request_data = await request.json()
-    except json.JSONDecodeError as e:
-        raise HTTPException(status_code=400, detail=f"Invalid JSON in request: {str(e)}")
-
-    # Validate + convert input
-    try:
-        converted = convert_request_to_sketches(request_data)
-    except (KeyError, ValueError) as e:
-        raise HTTPException(status_code=400, detail=f"Invalid request format: {str(e)}")
-
-    # Run optimization
-    try:
-        optimal_order = lp_running_order.optimize_running_order(
-            converted.sketches,
-            converted.precedence
-        )
-        success = True
-    except ValueError as e:
-        # Optimization failed but input was valid
-        optimal_order = list(range(len(converted.sketches)))
-        success = False
-
-    # Return output
-    return convert_result_to_json(
-        converted.sketches,
-        optimal_order,
-        converted.id_to_index,
-        success=success
-    )
 
 
 def create_error_response(error_message: str) -> JsonDict:
@@ -86,7 +46,7 @@ def create_error_response(error_message: str) -> JsonDict:
         "success": False,
         "error": error_message,
         "order": [],
-        "metrics": {"cast_overlaps": 0}
+        "metrics": {"cast_overlaps": 0},
     }
 
 
@@ -104,55 +64,51 @@ def convert_request_to_sketches(request_data: JsonDict) -> RunningOrderRequest:
             Whether optimization succeeded (False for invalid constraints)
 
     Returns:
-        Dictionary matching the JSON response format with:
-        - success: Boolean indicating if optimization succeeded
-        - order: List of sketches with positions and IDs
-        - metrics: Dictionary containing cast_overlaps count
+       A RunningOrderRequest that can be passed to optimize_running_order
     """
-    # Convert sketches and build ID mapping
     id_to_index, sketches = get_sketch_list(request_data)
-    # Process constraints
     anchored = {}
     precedence = []
     if "constraints" in request_data:
         constraints = request_data["constraints"]
         if "anchored" in constraints:
-            add_anchors_to_sketches(anchored, constraints["anchored"], id_to_index,
-                                    sketches)
-        # Process precedence constraints
+            add_anchors_to_sketches(
+                anchored, constraints["anchored"], id_to_index, sketches
+            )
         if "precedence" in constraints:
             precedence_constraints = constraints["precedence"]
             get_precedence_constraints(id_to_index, precedence, precedence_constraints)
     return RunningOrderRequest(
-        sketches=sketches,
-        precedence=precedence,
-        id_to_index=id_to_index
+        sketches=sketches, precedence=precedence, id_to_index=id_to_index
     )
 
 
 def get_precedence_constraints(id_to_index, precedence, precedence_constraints):
     """Process precedence constraints from JSON request format.
 
-        Takes sketch ordering constraints from the request and converts them
-        to index-based constraints used by the optimizer. Updates the precedence
-        list in place.
+    Takes sketch ordering constraints from the request and converts them
+    to index-based constraints used by the optimizer. Updates the precedence
+    list in place.
 
-        Args:
-            id_to_index: Mapping from sketch IDs to indices
-            precedence: List to be populated with (before_index, after_index) pairs
-            precedence_constraints: List of dicts, each with 'before' and 'after' sketch IDs
+    Args:
+        id_to_index
+            Mapping from sketch IDs to indices
+        precedence
+            List to be populated with (before_index, after_index) pairs
+        precedence_constraints
+            List of dicts, each with 'before' and 'after' sketch IDs
 
-        Raises:
-            ValueError: If constraint format is invalid or references unknown sketch IDs
+    Raises:
+        ValueError: If constraint format is invalid or references unknown sketch IDs
 
-        Example:
-            >>> id_to_index = {"sketch1": 0, "sketch2": 1}
-            >>> precedence = []
-            >>> constraints = [{"before": "sketch1", "after": "sketch2"}]
-            >>> get_precedence_constraints(id_to_index, precedence, constraints)
-            >>> precedence
-            [(0, 1)]  # sketch1 (index 0) must come before sketch2 (index 1)
-        """
+    Example:
+        >>> id_to_index = {"sketch1": 0, "sketch2": 1}
+        >>> precedence = []
+        >>> constraints = [{"before": "sketch1", "after": "sketch2"}]
+        >>> get_precedence_constraints(id_to_index, precedence, constraints)
+        >>> precedence
+        [(0, 1)]  # sketch1 (index 0) must come before sketch2 (index 1)
+    """
     for pred in precedence_constraints:
         if not all(key in pred for key in ["before", "after"]):
             raise ValueError("Precedence constraint missing required fields")
@@ -168,10 +124,10 @@ def get_precedence_constraints(id_to_index, precedence, precedence_constraints):
 
 
 def add_anchors_to_sketches(
-        anchored: dict[int, int],
-        anchored_constraints: list[dict[str, Any]],
-        id_to_index: dict[str, int],
-        sketches: list[Sketch]
+    anchored: dict[int, int],
+    anchored_constraints: list[dict[str, Any]],
+    id_to_index: dict[str, int],
+    sketches: list[Sketch],
 ) -> None:
     """Process anchored constraints from JSON request format.
 
@@ -180,10 +136,14 @@ def add_anchors_to_sketches(
     2. Adds position mappings to the anchored dictionary
 
     Args:
-        anchored: Dictionary to be populated with sketch_index -> position mappings
-        anchored_constraints: List of dicts, each with 'sketch_id' and 'position'
-        id_to_index: Mapping from sketch IDs to indices
-        sketches: List of Sketch objects to be updated
+        anchored
+            Dictionary to be populated with sketch_index -> position mappings
+        anchored_constraints
+            List of dicts, each with 'sketch_id' and 'position'
+        id_to_index
+            Mapping from sketch IDs to indices
+        sketches
+            List of Sketch objects to be updated
 
     Raises:
         ValueError: If:
@@ -214,8 +174,7 @@ def add_anchors_to_sketches(
         if position < 0 or position >= len(sketches):
             raise ValueError(f"Invalid position in anchor: {position}")
         if position in anchored.values():
-            raise ValueError(
-                f"Multiple sketches anchored to position {position}")
+            raise ValueError(f"Multiple sketches anchored to position {position}")
         sketches[sketch_index].anchored = True
         anchored[sketch_index] = position
 
@@ -263,19 +222,21 @@ def get_sketch_list(request_data: JsonDict) -> tuple[dict[str, int], list[Sketch
         if sketch_id in id_to_index:
             raise ValueError(f"Duplicate sketch ID: {sketch_id}")
         id_to_index[sketch_id] = i
-        sketches.append(Sketch(
-            title=sketch_data["title"],
-            cast=frozenset(sketch_data["cast"]),
-            anchored=False
-        ))
+        sketches.append(
+            Sketch(
+                title=sketch_data["title"],
+                cast=frozenset(sketch_data["cast"]),
+                anchored=False,
+            )
+        )
     return id_to_index, sketches
 
 
 def convert_result_to_json(
-        sketches: list[Sketch],
-        order: list[int],
-        id_to_index: dict[str, int],
-        success: bool = True
+    sketches: list[Sketch],
+    order: list[int],
+    id_to_index: dict[str, int],
+    success: bool = True,
 ) -> JsonDict:
     """Convert optimization result to JSON response format.
 
@@ -294,7 +255,8 @@ def convert_result_to_json(
     if order and len(order) > 1:
         print(f"Order type: {type(order)}, contents: {order}")  # Debug
         print(
-            f"Matrix type: {type(overlap_matrix)}, shape: {overlap_matrix.shape}")  # Debug
+            f"Matrix type: {type(overlap_matrix)}, shape: {overlap_matrix.shape}"
+        )  # Debug
         for i, j in zip(order[:-1], order[1:]):
             print(f"Index types: {type(i)}, {type(j)}")  # Debug
             i_int = int(i)
@@ -302,15 +264,15 @@ def convert_result_to_json(
             overlaps += overlap_matrix[i_int, j_int]
     ordered_sketches = []
     for position, sketch_index in enumerate(order):
-        ordered_sketches.append({
-            "position": position,
-            "sketch_id": index_to_id[int(sketch_index)],
-            "title": sketches[int(sketch_index)].title
-        })
+        ordered_sketches.append(
+            {
+                "position": position,
+                "sketch_id": index_to_id[int(sketch_index)],
+                "title": sketches[int(sketch_index)].title,
+            }
+        )
     return {
         "success": success,
         "order": ordered_sketches,
-        "metrics": {
-            "cast_overlaps": int(overlaps)
-        }
+        "metrics": {"cast_overlaps": int(overlaps)},
     }

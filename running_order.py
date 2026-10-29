@@ -6,7 +6,6 @@ from typing import Iterable, Self
 import numpy as np
 
 
-
 @dataclass
 class Sketch:
     """A sketch close to how it could be imported from a file or a UI.
@@ -29,7 +28,6 @@ class Sketch:
         self.cast = frozenset(self.cast)
         if not self.title.strip():
             raise ValueError("Sketch title cannot be empty")
-
 
 
 class SketchOrder:
@@ -141,6 +139,7 @@ def make_sketch_overlap_matrix(sketches: Iterable[Sketch]) -> np.ndarray:
     mat = np.array(make_player_incidence_matrix(sketches))
     return mat.T @ mat
 
+
 def calc_order_overlap(overlap_mat: np.ndarray, candidate: SketchOrder) -> int:
     """Calculate total cast overlap between adjacent sketches in an order.
 
@@ -152,6 +151,7 @@ def calc_order_overlap(overlap_mat: np.ndarray, candidate: SketchOrder) -> int:
         Sum of cast overlaps between consecutive sketches in the order
     """
     return sum(overlap_mat[i, j] for i, j in itertools.pairwise(candidate.order))
+
 
 def get_anchors(sketches: Iterable[Sketch]) -> dict[int, int]:
     """Get sketches that must remain in their current positions.

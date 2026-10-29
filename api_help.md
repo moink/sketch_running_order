@@ -154,9 +154,3 @@ if (order) {
 2. The `cast_overlaps` metric helps you evaluate the quality of the solution
 3. If optimization fails, you'll get back the sketches in their original order
 4. Consider caching the result if you're going to show multiple views of the same running order
-
-Would you like me to:
-1. Add more examples?
-2. Include more error scenarios?
-3. Add specific framework examples?
-4. Expand any section?
