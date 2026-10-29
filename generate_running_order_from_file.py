@@ -1,4 +1,6 @@
 import os
+import subprocess
+
 import pandas as pd
 from reportlab.lib.enums import TA_CENTER
 
@@ -13,10 +15,13 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, KeepTogether
 from xml.sax.saxutils import escape
 
 SEQ_COL = 'Fixed sequence'
-INPUT_FILE = (r"C:\Users\Moink\PycharmProjects\Sketch Running Order\test_data\Sketch "
-              r"bomb 2026-10-30 - casting.csv")
-DATA_DIR = os.path.dirname(INPUT_FILE)
-OUTPUT_FILE = os.path.join(DATA_DIR, "running_order.pdf")
+CSV_URL = (
+    "https://docs.google.com/spreadsheets/d/"
+    "1JPa_l8abQdKdGwhZ7Yp7F9Hfl-4TFpsbGJd5qg-1qPM"
+    "/export?format=csv&gid=1098282962"
+)
+OUTPUT_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                           "running_order.pdf")
 IGNORE_COLS = {'Character count', 'Casted count', 'Still needed'}
 NOT_NAME_COLS = IGNORE_COLS.union({SEQ_COL})
 
@@ -24,10 +29,11 @@ def main():
     sketches = read_sketches()
     ordered = optimize_running_order(sketches, [])
     create_running_order_pdf(sketches, ordered, OUTPUT_FILE)
+    subprocess.Popen(["xdg-open", OUTPUT_FILE])
 
 
 def read_sketches():
-    full_input = pd.read_csv(INPUT_FILE, index_col=0)
+    full_input = pd.read_csv(CSV_URL, index_col=0)
     names = sorted(set(full_input.columns).difference(NOT_NAME_COLS))
     num_sketches = (
         full_input.index.isna().argmax()
