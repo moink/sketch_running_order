@@ -1,0 +1,14 @@
+Sketch name,Character count,Theresa,Roman,Evelyn,Anna,Johanna,Harry,Daniel,Torge,Sean,Casted count,Still needed,Fixed sequence
+Test sketch 1,3,char1,char2,char3,,,,,,,3,0,0
+Test sketch 2,2,,,,char1,char2,,,,,2,0,
+Test sketch 3,4,,char1,,,,char2,char3,char4,,4,0,
+Test sketch 4,7,char2,char3,char1,,char6,char7,,char4,char5,7,0,
+Test sketch 5,2,,,,,,,,char1,char2,2,0,
+Test sketch 6,5,,,,char3,char5,,char4,char1,char2,5,0,
+Test sketch 7,4,,,char1,char2,char3,char4,,,,4,0,8
+Test sketch 8,3,char1,,,,,,,char2,char3,3,0,
+Test sketch 9,2,,char1,char2,,,,,,,2,0,
+,,,,,,,,,,,0,0,
+Total characters,32,3,4,4,3,4,3,2,5,4,32,0,
+Performers,9,0,0,0,0,0,0,1,-1,0,,,
+Avg per performer,3.555555556,,,,,,,,,,,,
